@@ -1,6 +1,7 @@
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/syntactic_entity.dart';
 import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/source/line_info.dart';
@@ -37,6 +38,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  final _sourceCode = codeString2;
+
   late final ParseStringResult _parsedCode;
   late final DocumentEditor _editor;
 
@@ -53,7 +56,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _analyzeCode() {
     print("Parsing Dart code");
-    _parsedCode = parseString(content: codeString);
+    _parsedCode = parseString(content: _sourceCode);
     print("Done parsing code");
     print("There are ${_parsedCode.lineInfo.lineCount} lines of code");
     print("There are ${_parsedCode.errors.length} errors in the code");
@@ -74,7 +77,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   MutableDocument _createDocumentFromCode() {
     print("Creating document from parsed code...");
-    print("Source code length: ${codeString.length}");
+    print("Source code length: ${_sourceCode.length}");
 
     final nodes = <DocumentNode>[];
     for (final lineStart in _parsedCode.lineInfo.lineStarts) {
@@ -83,7 +86,7 @@ class _MyHomePageState extends State<MyHomePage> {
       if (_parsedCode.lineInfo.lineStarts.last == lineStart) {
         // This is the last line. We can't ask for the line after that.
         // The line ends at the end of the text.
-        lineEnd = codeString.length;
+        lineEnd = _sourceCode.length;
       } else {
         lineEnd = _parsedCode.lineInfo.getOffsetOfLineAfter(lineStart) - 1;
       }
@@ -92,7 +95,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ParagraphNode(
           id: DocumentEditor.createNodeId(),
           text: AttributedText(
-            text: codeString.substring(
+            text: _sourceCode.substring(
               lineStart,
               lineEnd,
             ),
@@ -115,19 +118,28 @@ class _MyHomePageState extends State<MyHomePage> {
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(72.0),
-          child: Column(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SuperEditor(
-                editor: _editor,
-                stylesheet: defaultStylesheet.copyWith(
-                  addRulesAfter: [
-                    textStyles,
-                    commentStyle,
-                  ],
-                  inlineTextStyler: _spanStyleBuilder,
+              Expanded(
+                child: ColoredBox(
+                  color: const Color(0xFF263238),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: SuperEditor(
+                      editor: _editor,
+                      stylesheet: defaultStylesheet.copyWith(
+                        addRulesAfter: [
+                          textStyles,
+                          commentStyle,
+                        ],
+                        inlineTextStyler: _spanStyleBuilder,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 72),
+              const SizedBox(width: 72),
               const FlutterSyntaxViewExample(),
             ],
           ),
@@ -144,7 +156,7 @@ final textStyles = StyleRule(
       "maxWidth": 1400.0,
       "padding": const CascadingPadding.all(0),
       "textStyle": const TextStyle(
-        color: Colors.black,
+        color: Colors.white,
         fontSize: 12,
         height: 1.2,
       ),
@@ -157,9 +169,8 @@ final commentStyle = StyleRule(
   (doc, docNode) {
     return {
       "textStyle": const TextStyle(
-        color: Colors.green,
+        color: Color(0xFF9E9E9E),
         fontSize: 12,
-        fontWeight: FontWeight.bold,
         height: 1.2,
       ),
     };
@@ -169,9 +180,19 @@ final commentStyle = StyleRule(
 TextStyle _spanStyleBuilder(Set<Attribution> attributions, TextStyle existingStyle) {
   TextStyle style = defaultInlineTextStyler(attributions, existingStyle);
 
-  if (attributions.contains(const NamedAttribution("variableName"))) {
+  if (attributions.contains(keywordAttribution)) {
     style = style.copyWith(
-      fontFamily: GoogleFonts.firaCode().fontFamily,
+      color: const Color(0xFFffa959),
+    );
+  }
+  if (attributions.contains(typeAttribution)) {
+    style = style.copyWith(
+      color: const Color(0xFF44ba8b),
+    );
+  }
+  if (attributions.contains(variableNameAttribution)) {
+    style = style.copyWith(
+      // fontFamily: GoogleFonts.firaCode().fontFamily,
       fontWeight: FontWeight.bold,
     );
   }
@@ -192,6 +213,23 @@ class _StyleVisitor<R> extends RecursiveAstVisitor<R> {
   final MutableDocument document;
 
   @override
+  R? visitClassDeclaration(ClassDeclaration node) {
+    _applyStyleToAllKeywords(node);
+    _applyStyleToAllTypes(node);
+    return super.visitClassDeclaration(node);
+  }
+
+  @override
+  R? visitConstructorDeclaration(ConstructorDeclaration node) {
+    print("Constructor:");
+    print(" - children: ${node.childEntities}");
+    print(" - child types: ${node.childEntities.map((child) => child.runtimeType).toList()}");
+    _applyStyleToAllKeywords(node);
+    _applyStyleToAllTypes(node);
+    return super.visitConstructorDeclaration(node);
+  }
+
+  @override
   R? visitComment(Comment node) {
     final startLocation = lineInfo.getLocation(node.offset);
     final endLocation = lineInfo.getLocation(node.end);
@@ -202,11 +240,67 @@ class _StyleVisitor<R> extends RecursiveAstVisitor<R> {
       paragraph.metadata["blockType"] = const NamedAttribution("comment");
     }
 
-    return null;
+    return super.visitComment(node);
+  }
+
+  @override
+  R? visitImplementsClause(ImplementsClause node) {
+    print("visitImplementsClause()");
+    print(" - keyword: ${node.implementsKeyword}");
+    print(" - keyword type: ${node.implementsKeyword.type}");
+    print(" - children: ${node.childEntities.map((child) => child.runtimeType)}");
+    print(" - implements child: ${node.childEntities.first.runtimeType}");
+
+    // The first child is the "implements" keyword.
+    _applyStyle(node.childEntities.first, keywordAttribution);
+
+    // All other children are interfaces.
+    node.childEntities.whereType<NamedType>().forEach((syntacticEntity) {
+      _applyStyle(syntacticEntity, typeAttribution);
+    });
+
+    return super.visitImplementsClause(node);
+  }
+
+  @override
+  R? visitNamedType(NamedType node) {
+    print("visitNamedType(): ${node.name}");
+    print(" - children: ${node.childEntities.first.runtimeType}");
+
+    if (node.name.name == "void") {
+      // "void" is categorized as a "named type", but we want to style "void"
+      // like a keyword, not a type.
+      _applyStyle(node, keywordAttribution);
+      return super.visitNamedType(node);
+    }
+
+    final typeStartOffset = node.name.offset;
+    final typeEndOffset = node.name.end;
+    print("Styling a type: ${node.name.name}, $typeStartOffset -> $typeEndOffset");
+    final lineIndex = lineInfo.getLocation(typeStartOffset).lineNumber - 1; // -1 because first line is "1"
+    print("Line: $lineIndex");
+    final lineStartInCode = lineInfo.getOffsetOfLine(lineIndex);
+    print("Line start: $lineStartInCode");
+
+    final paragraph = document.getNodeAt(lineIndex) as ParagraphNode;
+    final paragraphStart = typeStartOffset - lineStartInCode;
+    final paragraphEnd = typeEndOffset - lineStartInCode;
+    print("A type within paragraph (${paragraph.text.text.length}): $paragraphStart -> $paragraphEnd");
+
+    paragraph.text.addAttribution(
+      typeAttribution,
+      SpanRange(start: paragraphStart, end: paragraphEnd),
+    );
+
+    return super.visitNamedType(node);
   }
 
   @override
   R? visitVariableDeclaration(VariableDeclaration node) {
+    print("visitVariableDeclaration()");
+    print(" - children: ${node.childEntities}");
+    print(" - children types: ${node.childEntities.map((child) => child.runtimeType)}");
+
     final codeStartOffset = node.name2.offset;
     final codeEndOffset = node.name2.end;
     print("Styling a variable name: ${node.name2.lexeme}, $codeStartOffset -> $codeEndOffset");
@@ -221,11 +315,11 @@ class _StyleVisitor<R> extends RecursiveAstVisitor<R> {
     print("Variable name within paragraph (${paragraph.text.text.length}): $paragraphStart -> $paragraphEnd");
 
     paragraph.text.addAttribution(
-      const NamedAttribution("variableName"),
+      variableNameAttribution,
       SpanRange(start: paragraphStart, end: paragraphEnd),
     );
 
-    return null;
+    return super.visitVariableDeclaration(node);
   }
 
   @override
@@ -244,7 +338,40 @@ class _StyleVisitor<R> extends RecursiveAstVisitor<R> {
       );
     }
 
-    return null;
+    return super.visitFunctionDeclaration(node);
+  }
+
+  void _applyStyleToAllKeywords(AstNode node) {
+    node.childEntities.whereType<Token>().where((token) => token.isKeyword).forEach((syntacticEntity) {
+      _applyStyle(syntacticEntity, keywordAttribution);
+    });
+  }
+
+  void _applyStyleToAllTypes(AstNode node) {
+    node.childEntities.whereType<Token>().where((token) => token.isIdentifier).forEach((syntacticEntity) {
+      _applyStyle(syntacticEntity, typeAttribution);
+    });
+  }
+
+  void _applyStyle(SyntacticEntity entity, Attribution style) {
+    final startOffset = entity.offset;
+    final endOffset = entity.end - 1;
+    print("Styling an entity: $entity, $startOffset -> $endOffset, with style: $style");
+
+    final lineIndex = lineInfo.getLocation(startOffset).lineNumber - 1; // -1 because first line is "1"
+    print("Line: $lineIndex");
+    final lineStartInCode = lineInfo.getOffsetOfLine(lineIndex);
+    print("Line start: $lineStartInCode");
+
+    final paragraph = document.getNodeAt(lineIndex) as ParagraphNode;
+    final paragraphStart = startOffset - lineStartInCode;
+    final paragraphEnd = endOffset - lineStartInCode;
+    print("An entity within paragraph (${paragraph.text.text.length}): $paragraphStart -> $paragraphEnd");
+
+    paragraph.text.addAttribution(
+      style,
+      SpanRange(start: paragraphStart, end: paragraphEnd),
+    );
   }
 }
 
@@ -261,27 +388,13 @@ class PrintVisitor<R> extends RecursiveAstVisitor<R> {
   @override
   R? visitClassDeclaration(ClassDeclaration node) {
     print("Class:");
-
-    print("Implements clause:");
-    for (final implementsTerm in node.implementsClause!.childEntities) {
-      print(" - ${implementsTerm.toString()}");
-    }
-
-    Token? token = node.firstTokenAfterCommentAndMetadata;
-    // while (token != null) {
-    print(" - ${token.lexeme}");
-    token = token.next;
-    print(" - ${token?.lexeme}");
-    token = token?.next;
-    print(" - ${token?.lexeme}");
-    token = token?.next;
-    print(" - ${token?.lexeme}");
-    token = token?.next;
-    print(" - ${token?.lexeme}");
-    token = token?.next;
-    print(" - ${token?.lexeme}");
-    // }
+    print(" - children: ${node.childEntities}");
+    print(" - children types: ${node.childEntities.map((child) => child.runtimeType)}");
 
     return null;
   }
 }
+
+const keywordAttribution = NamedAttribution("keyword");
+const typeAttribution = NamedAttribution("type");
+const variableNameAttribution = NamedAttribution("variableName");
