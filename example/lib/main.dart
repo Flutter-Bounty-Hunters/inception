@@ -38,7 +38,9 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   late final ParseStringResult _parsedCode;
-  late final DocumentEditor _editor;
+  late final Editor _editor;
+  late final MutableDocument _document;
+  late final MutableDocumentComposer _composer;
 
   @override
   void initState() {
@@ -46,8 +48,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
     _analyzeCode();
 
-    _editor = DocumentEditor(
-      document: _createDocumentFromCode(),
+    _document = _createDocumentFromCode();
+    _composer = MutableDocumentComposer();
+    _editor = Editor(
+      editables: {
+        Editor.documentKey: _document,
+        Editor.composerKey: _composer,
+      },
     );
   }
 
@@ -90,9 +97,9 @@ class _MyHomePageState extends State<MyHomePage> {
       print("Line end: $lineEnd");
       nodes.add(
         ParagraphNode(
-          id: DocumentEditor.createNodeId(),
+          id: Editor.createNodeId(),
           text: AttributedText(
-            text: codeString.substring(
+            codeString.substring(
               lineStart,
               lineEnd,
             ),
@@ -119,6 +126,8 @@ class _MyHomePageState extends State<MyHomePage> {
             children: [
               SuperEditor(
                 editor: _editor,
+                document: _document,
+                composer: _composer,
                 stylesheet: defaultStylesheet.copyWith(
                   addRulesAfter: [
                     textStyles,
@@ -207,9 +216,9 @@ class _StyleVisitor<R> extends RecursiveAstVisitor<R> {
 
   @override
   R? visitVariableDeclaration(VariableDeclaration node) {
-    final codeStartOffset = node.name2.offset;
-    final codeEndOffset = node.name2.end;
-    print("Styling a variable name: ${node.name2.lexeme}, $codeStartOffset -> $codeEndOffset");
+    final codeStartOffset = node.name.offset;
+    final codeEndOffset = node.name.end;
+    print("Styling a variable name: ${node.name.lexeme}, $codeStartOffset -> $codeEndOffset");
     final lineIndex = lineInfo.getLocation(codeStartOffset).lineNumber - 1; // -1 because first line is "1"
     print("Line: $lineIndex");
     final lineStartInCode = lineInfo.getOffsetOfLine(lineIndex);
@@ -222,7 +231,7 @@ class _StyleVisitor<R> extends RecursiveAstVisitor<R> {
 
     paragraph.text.addAttribution(
       const NamedAttribution("variableName"),
-      SpanRange(start: paragraphStart, end: paragraphEnd),
+      SpanRange(paragraphStart, paragraphEnd),
     );
 
     return null;
@@ -240,7 +249,7 @@ class _StyleVisitor<R> extends RecursiveAstVisitor<R> {
       final paragraph = document.getNodeAt(lineIndex) as ParagraphNode;
       paragraph.text.addAttribution(
         const NamedAttribution("returnType"),
-        SpanRange(start: codeStartOffset - lineStartInCode, end: codeEndOffset - lineStartInCode),
+        SpanRange(codeStartOffset - lineStartInCode, codeEndOffset - lineStartInCode),
       );
     }
 

@@ -1,14 +1,14 @@
 name: inception
-description: A code editing toolkit for Flutter
+description: A code editor toolkit for Flutter
 version: 0.0.1
 homepage: https://github.com/Flutter-Bounty-Hunters/inception
 
 environment:
-  sdk: ">=2.17.6 <3.0.0"
+  sdk: ">=2.17.6 <4.0.0"
   flutter: ">=1.17.0"
 
 dependencies:
-  analyzer: ^4.6.0
+  analyzer: ^6.4.1
   flutter:
     sdk: flutter
 

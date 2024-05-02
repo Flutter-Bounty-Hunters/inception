@@ -12,12 +12,12 @@ dependencies:
   flutter:
     sdk: flutter
 
-  analyzer: ^4.6.0
+  analyzer: ^6.4.1
   super_editor:
     git:
       url: git@github.com:superlistapp/super_editor.git
       path: super_editor/
-  google_fonts: ^3.0.1
+  google_fonts: ^6.2.1
   flutter_highlight: ^0.7.0
   flutter_syntax_view: ^4.0.0
 
