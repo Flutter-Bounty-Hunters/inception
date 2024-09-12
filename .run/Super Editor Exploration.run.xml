@@ -1,0 +1,6 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Super Editor Exploration" type="FlutterRunConfigurationType" factoryName="Flutter">
+    <option name="filePath" value="$PROJECT_DIR$/example/lib/super_editor_exploration/main_super_editor_exploration.dart" />
+    <method v="2" />
+  </configuration>
+</component>

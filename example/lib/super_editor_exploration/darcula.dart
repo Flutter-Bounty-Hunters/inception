@@ -1,4 +1,4 @@
-import 'package:example/theme.dart';
+import 'package:example/super_editor_exploration/theme.dart';
 import 'package:flutter/painting.dart';
 
 const darculaTheme = SyntaxTheme(

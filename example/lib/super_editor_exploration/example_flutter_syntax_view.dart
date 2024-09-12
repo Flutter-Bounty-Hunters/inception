@@ -1,4 +1,4 @@
-import 'package:example/code_samples.dart';
+import 'package:example/super_editor_exploration/code_samples.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_syntax_view/flutter_syntax_view.dart';
 

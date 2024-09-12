@@ -20,6 +20,15 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_highlight: ^0.7.0
   flutter_syntax_view: ^4.0.0
+  syntax_highlight: ^0.4.0
+
+  # Language Server Protocol Stuff
+  lsp_client: ^0.1.2
+  language_server_protocol:
+    git:
+      url: https://github.com/dart-lang/sdk.git
+      path: third_party/pkg/language_server_protocol
+  file_picker: ^8.1.2
 
 dev_dependencies:
   flutter_test:
@@ -45,12 +54,12 @@ flutter:
   # "family" key with the font family name, and a "fonts" key with a
   # list giving the asset and other descriptors for the font. For
   # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
+  fonts:
+    - family: SourceCodePro
+      fonts:
+        - asset: assets/fonts/Source_Code_Pro/SourceCodePro-VariableFont_wght.ttf
+        - asset: assets/fonts/Source_Code_Pro/SourceCodePro-Italic-VariableFont_wght.ttf
+          style: italic
   #   - family: Trajan Pro
   #     fonts:
   #       - asset: fonts/TrajanPro.ttf
