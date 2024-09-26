@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:example/ide/infrastructure/controls/toolbar_buttons.dart';
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
+import 'package:example/ide/lsp/lsp_panel.dart';
+import 'package:example/ide/workspace.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
@@ -9,10 +10,10 @@ import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 class IDE extends StatefulWidget {
   const IDE({
     super.key,
-    required this.lspClient,
+    required this.workspace,
   });
 
-  final LspClient lspClient;
+  final Workspace workspace;
 
   @override
   State<IDE> createState() => _IDEState();
@@ -40,7 +41,7 @@ class _IDEState extends State<IDE> {
                     const LeftBar(),
                     Expanded(
                       child: ContentArea(
-                        lspClient: widget.lspClient,
+                        workspace: widget.workspace,
                         showLeftPane: _showLeftPane,
                         showRightPane: _showRightPane,
                       ),
@@ -198,12 +199,12 @@ class BottomBar extends StatelessWidget {
 class ContentArea extends StatefulWidget {
   const ContentArea({
     super.key,
-    required this.lspClient,
+    required this.workspace,
     required this.showLeftPane,
     required this.showRightPane,
   });
 
-  final LspClient lspClient;
+  final Workspace workspace;
 
   final bool showLeftPane;
   final bool showRightPane;
@@ -228,7 +229,7 @@ class _ContentAreaState extends State<ContentArea> {
     _treeController = TreeController(
       roots: [
         EntityNode(
-          Directory(const String.fromEnvironment("CONTENT_DIRECTORY")),
+          widget.workspace.directory,
         ),
       ],
       defaultExpansionState: true,
@@ -274,6 +275,7 @@ class _ContentAreaState extends State<ContentArea> {
                 right: BorderSide(color: dividerColor),
               ),
             ),
+            child: _buildRightPaneContent(),
           ),
       ],
     );
@@ -301,7 +303,7 @@ class _ContentAreaState extends State<ContentArea> {
               languageId = "yaml";
             }
 
-            widget.lspClient.didOpenTextDocument(
+            widget.workspace.lspClient.didOpenTextDocument(
               DidOpenTextDocumentParams(
                 textDocument: TextDocumentItem(
                   uri: "file://${file.path}",
@@ -342,6 +344,10 @@ class _ContentAreaState extends State<ContentArea> {
         ),
       ),
     );
+  }
+
+  Widget _buildRightPaneContent() {
+    return LspPanel(workspace: widget.workspace);
   }
 }
 

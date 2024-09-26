@@ -9,24 +9,43 @@ import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
 import 'package:example/lsp_exploration/lsp/messages/semantic_tokens.dart';
 import 'package:example/lsp_exploration/lsp/messages/type_hierarchy.dart';
+import 'package:flutter/foundation.dart';
 
-class LspClient {
+class LspClient with ChangeNotifier {
   LspJsonRpcClient? _lspClientCommunication;
 
+  LspClientStatus get status => _status;
+  LspClientStatus _status = LspClientStatus.notRunning;
+
   Future<void> start() async {
+    _status = LspClientStatus.starting;
+    notifyListeners();
+
+    // TODO: handle possible process creation failure.
     _lspClientCommunication = LspJsonRpcClient();
     await _lspClientCommunication!.start();
+
+    _status = LspClientStatus.started;
+    notifyListeners();
   }
 
   Future<InitializeResult> initialize(InitializeParams request) async {
+    _status = LspClientStatus.initializing;
+    notifyListeners();
+
     final data = await _lspClientCommunication!.sendRequest(
       'initialize',
       request.toJson(),
     );
 
     if (data is! LspObject) {
+      // TODO: clean up the client after the failure so that it can continue to
+      // be used.
       throw Exception('Unexpected response type: ${data.runtimeType}');
     }
+
+    _status = LspClientStatus.initialized;
+    notifyListeners();
 
     return InitializeResult.fromJson(data.value);
   }
@@ -39,6 +58,9 @@ class LspClient {
 
   void stop() {
     _lspClientCommunication?.stop();
+
+    _status = LspClientStatus.notRunning;
+    notifyListeners();
   }
 
   Future<void> didOpenTextDocument(DidOpenTextDocumentParams params) async {
@@ -326,6 +348,18 @@ class LspJsonRpcClient {
   void _onError(List<int> event) {
     print(event);
   }
+}
+
+enum LspClientStatus {
+  notRunning,
+
+  // The LSP client is "started" when its process is setup.
+  starting,
+  started,
+
+  // The LSP client is "initialized" after completing the initialize call to the server.
+  initializing,
+  initialized,
 }
 
 /// Converts a Dart Type to a Language Server Protocol primitive type, e.g., a List
