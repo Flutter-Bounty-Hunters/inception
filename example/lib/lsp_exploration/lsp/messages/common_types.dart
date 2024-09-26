@@ -12,15 +12,23 @@ class TextDocumentIdentifier {
 }
 
 mixin TextDocumentPositionParams {
-  TextDocumentIdentifier textDocument = TextDocumentIdentifier(uri: '');
-  Position position = Position(line: -1, character: -1);
+  final TextDocumentIdentifier textDocument = const TextDocumentIdentifier(uri: '');
+  final Position position = const Position(line: -1, character: -1);
+
+  Map<String, dynamic> toJson() {
+    return {
+      'textDocument': textDocument.toJson(),
+      'position': position.toJson(),
+    };
+  }
 }
 
 class Position {
-  Position({
+  const Position({
     required this.line,
     required this.character,
   });
+
   final int line;
   final int character;
 

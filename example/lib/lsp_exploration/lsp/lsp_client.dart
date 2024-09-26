@@ -8,18 +8,18 @@ import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
 import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
 import 'package:example/lsp_exploration/lsp/messages/semantic_tokens.dart';
+import 'package:example/lsp_exploration/lsp/messages/type_hierarchy.dart';
 
-
-class SuperLsp {
-  LspClientComunication? _lspClientComunication;
+class LspClient {
+  LspJsonRpcClient? _lspClientCommunication;
 
   Future<void> start() async {
-    _lspClientComunication = LspClientComunication();
-    await _lspClientComunication!.start();
+    _lspClientCommunication = LspJsonRpcClient();
+    await _lspClientCommunication!.start();
   }
 
   Future<InitializeResult> initialize(InitializeParams request) async {
-    final data = await _lspClientComunication!.sendRequest(
+    final data = await _lspClientCommunication!.sendRequest(
       'initialize',
       request.toJson(),
     );
@@ -32,24 +32,24 @@ class SuperLsp {
   }
 
   Future<void> initialized() async {
-    await _lspClientComunication!.sendNotification(
+    await _lspClientCommunication!.sendNotification(
       'initialized',
     );
   }
 
   void stop() {
-    _lspClientComunication?.stop();
+    _lspClientCommunication?.stop();
   }
 
   Future<void> didOpenTextDocument(DidOpenTextDocumentParams params) async {
-    await _lspClientComunication!.sendNotification(
+    await _lspClientCommunication!.sendNotification(
       'textDocument/didOpen',
       params.toJson(),
     );
   }
 
   Future<Hover?> hover(HoverParams params) async {
-    final data = await _lspClientComunication!.sendRequest(
+    final data = await _lspClientCommunication!.sendRequest(
       'textDocument/hover',
       params.toJson(),
     );
@@ -69,7 +69,7 @@ class SuperLsp {
   }
 
   Future<List<DocumentSymbol>?> documentSymbols(DocumentSymbolsParams params) async {
-    final data = await _lspClientComunication!.sendRequest(
+    final data = await _lspClientCommunication!.sendRequest(
       'textDocument/documentSymbol',
       params.toJson(),
     );
@@ -88,7 +88,7 @@ class SuperLsp {
   }
 
   Future<SemanticTokens?> semanticTokens(SemanticTokensParms params) async {
-    final data = await _lspClientComunication!.sendRequest(
+    final data = await _lspClientCommunication!.sendRequest(
       'textDocument/semanticTokens/full',
       params.toJson(),
     );
@@ -106,9 +106,27 @@ class SuperLsp {
       data: List<int>.from(data.value['data']),
     );
   }
+
+  // TODO: Replace TextDocumentPositionParams with a TypeHierarchyPrepareParams
+  Future<List<TypeHierarchyItem>?> prepareTypeHierarchy(PrepareTypeHierarchyParams params) async {
+    final data = await _lspClientCommunication!.sendRequest(
+      'textDocument/prepareTypeHierarchy',
+      params.toJson(),
+    );
+
+    if (data is LspNull) {
+      return null;
+    }
+
+    if (data is! LspArray) {
+      throw Exception('Unexpected response type: ${data.runtimeType}');
+    }
+
+    return data.value.map((itemJson) => TypeHierarchyItem.fromJson(itemJson)).toList();
+  }
 }
 
-class LspClientComunication {
+class LspJsonRpcClient {
   Process? _lspProcess;
   int _currentCommandId = 0;
 
@@ -184,6 +202,8 @@ class LspClientComunication {
 
   void _onData(List<int> event) {
     _buffer += String.fromCharCodes(event);
+
+    print("_onData - buffer:\n${_buffer.toString()}");
 
     while (_tryParse()) {
       // Keep trying to parse until we either finish parsing the message
@@ -286,7 +306,7 @@ class LspClientComunication {
     if (error != null) {
       completer.completeError(LspResponseError.fromJson(error));
     } else {
-      completer.complete(_convertType(map["result"]));
+      completer.complete(jsonTypeToLspType(map["result"]));
     }
 
     return true;
@@ -306,20 +326,21 @@ class LspClientComunication {
   void _onError(List<int> event) {
     print(event);
   }
+}
 
-  LspAny _convertType(dynamic value) {
-    return switch (value) {
-      Map<String, dynamic> map => LspObject(map),
-      List<dynamic> list => LspArray(list),
-      String string => LspString(string),
-      int integer => LspInteger(integer),
-      double decimal => LspDecimal(decimal),
-      bool boolean => LspBool(boolean),
-      null => LspNull(),
-      _ => throw Exception('Unknown type: $value'),
-    };
-  }
-
+/// Converts a Dart Type to a Language Server Protocol primitive type, e.g., a List
+/// to an [LspList].
+LspAny jsonTypeToLspType(dynamic value) {
+  return switch (value) {
+    Map<String, dynamic> map => LspObject(map),
+    List<dynamic> list => LspArray(list),
+    String string => LspString(string),
+    int integer => LspInteger(integer),
+    double decimal => LspDecimal(decimal),
+    bool boolean => LspBool(boolean),
+    null => LspNull(),
+    _ => throw Exception('Unknown type: $value'),
+  };
 }
 
 class LspResponseError {

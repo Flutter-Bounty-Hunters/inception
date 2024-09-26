@@ -63,6 +63,8 @@ enum SymbolKind {
   operator(25),
   typeParameter(26);
 
+  static SymbolKind fromJson(int jsonInt) => SymbolKind.values.firstWhere((symbolKind) => symbolKind.value == jsonInt);
+
   const SymbolKind(this.value);
 
   final int value;

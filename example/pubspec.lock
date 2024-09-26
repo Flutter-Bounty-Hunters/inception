@@ -155,6 +155,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_fancy_tree_view:
+    dependency: "direct main"
+    description:
+      name: flutter_fancy_tree_view
+      sha256: e8ef261170be1d63fe56843baa2b501fc353196eadef51d848e882d8cbe10c31
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.6.0"
   flutter_highlight:
     dependency: "direct main"
     description:
@@ -285,23 +293,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.1"
-  json_annotation:
-    dependency: transitive
-    description:
-      name: json_annotation
-      sha256: "1ce844379ca14835a50d2f019a3099f419082cfdd231cd86a142af94dd5c6bb1"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.9.0"
-  language_server_protocol:
-    dependency: "direct main"
-    description:
-      path: "third_party/pkg/language_server_protocol"
-      ref: HEAD
-      resolved-ref: "2aa54ab42cf948e7908dcf07af64bf1689b45bdd"
-      url: "https://github.com/dart-lang/sdk.git"
-    source: git
-    version: "0.0.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -350,14 +341,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.0"
-  lsp_client:
-    dependency: "direct main"
-    description:
-      name: lsp_client
-      sha256: "806cadb39478e5ca0b4f922c03e849ad9575bc79a6abee2e78b75527917d8cfd"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.2"
   macros:
     dependency: transitive
     description:

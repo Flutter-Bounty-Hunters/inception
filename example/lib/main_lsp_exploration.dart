@@ -1,10 +1,12 @@
 import 'dart:io';
 
+import 'package:example/ide/ide.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
+import 'package:example/lsp_exploration/lsp/messages/type_hierarchy.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -24,6 +26,8 @@ class _Screen extends StatefulWidget {
 }
 
 class _ScreenState extends State<_Screen> {
+  late final LspClient _client;
+
   @override
   void initState() {
     super.initState();
@@ -32,11 +36,12 @@ class _ScreenState extends State<_Screen> {
   }
 
   Future<void> _doDemo() async {
-    final directory = await _selectSourceDirectory();
-    if (directory == null) {
-      print("Failed to select a directory");
-      return;
-    }
+    // final directory = await _selectSourceDirectory();
+    // if (directory == null) {
+    //   print("Failed to select a directory");
+    //   return;
+    // }
+    final directory = Directory(const String.fromEnvironment("CONTENT_DIRECTORY"));
 
     await _connectToLsp(directory);
   }
@@ -57,12 +62,12 @@ class _ScreenState extends State<_Screen> {
     print("Source directory: ${directory.absolute.path}");
     final directoryPath = directory.absolute.path;
 
-    final client = SuperLsp();
-    await client.start();
+    _client = LspClient();
+    await _client.start();
     print("LSP client is started");
 
     try {
-      await client.initialize(
+      await _client.initialize(
         InitializeParams(
           rootUri: 'file://$directoryPath',
           capabilities: LspClientCapabilities(
@@ -74,36 +79,55 @@ class _ScreenState extends State<_Screen> {
       );
 
       // Notify the LSP server that we are done handling the initialize result.
-      await client.initialized();
+      await _client.initialized();
 
-      // final analyzedFuture = await client.awaitAnalyzed();
-      // print("LSP analysis is done");
-      // Notify the LSP server that we have opened a text document.
-      final exampleFile = '$directoryPath/lib/main.dart';
-      final fileUri = 'file://$exampleFile';
-      final content = await File(exampleFile).readAsString();
-      await client.didOpenTextDocument(
-        DidOpenTextDocumentParams(
-          textDocument: TextDocumentItem(
-            uri: fileUri,
-            languageId: 'dart',
-            version: 1,
-            text: content,
-          ),
-        ),
-      );
+      // // final analyzedFuture = await client.awaitAnalyzed();
+      // // print("LSP analysis is done");
+      // // Notify the LSP server that we have opened a text document.
+      // final exampleFile = '$directoryPath/lib/main.dart';
+      // final fileUri = 'file://$exampleFile';
+      // final content = await File(exampleFile).readAsString();
+      // await _client.didOpenTextDocument(
+      //   DidOpenTextDocumentParams(
+      //     textDocument: TextDocumentItem(
+      //       uri: fileUri,
+      //       languageId: 'dart',
+      //       version: 1,
+      //       text: content,
+      //     ),
+      //   ),
+      // );
+      //
+      // final typeHierarchy = await _client.prepareTypeHierarchy(
+      //   PrepareTypeHierarchyParams(
+      //     textDocument: TextDocumentIdentifier(uri: fileUri),
+      //     position: Position(line: 11, character: 9),
+      //   ),
+      // );
+      // print("Prepare type hierarchy result:");
+      // if (typeHierarchy == null) {
+      //   print(" - No type hierarchy found");
+      // } else {
+      //   for (final type in typeHierarchy) {
+      //     print(
+      //         " - name: ${type.name}, detail: ${type.detail}, URI: ${type.uri}, range: ${type.range}, tags: ${type.tags}, symbol kind: ${type.kind}");
+      //   }
+      // }
+      // print("------");
 
-      final symbols = await client.documentSymbols(
-        DocumentSymbolsParams(
-          textDocument: TextDocumentIdentifier(uri: fileUri),
-        ),
-      );
-      if (symbols != null) {
-        for (final symbol in symbols) {
-          print("${symbol.name} (${symbol.kind}) at ${symbol.range.start.line}:${symbol.range.start.character}");
-        }
-      }
+      /////////////////////////////
+      // final symbols = await client.documentSymbols(
+      //   DocumentSymbolsParams(
+      //     textDocument: TextDocumentIdentifier(uri: fileUri),
+      //   ),
+      // );
+      // if (symbols != null) {
+      //   for (final symbol in symbols) {
+      //     print("${symbol.name} (${symbol.kind}) at ${symbol.range.start.line}:${symbol.range.start.character}");
+      //   }
+      // }
 
+      /////////////////////////////
       //print("Sending textDocumentSymbol request");
       //await client.dartTextDocumentSymbol('$directoryPath/lib/main.dart');
 
@@ -118,12 +142,14 @@ class _ScreenState extends State<_Screen> {
     } on LspResponseError catch (e) {
       print('Error ${e.code}: ${e.message}');
     } finally {
-      client.stop();
+      // _client.stop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Placeholder();
+    return IDE(
+      lspClient: _client,
+    );
   }
 }
