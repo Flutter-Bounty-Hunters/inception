@@ -1,7 +1,7 @@
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 
-class SemanticTokensParms {
-  SemanticTokensParms({
+class SemanticTokensParams {
+  SemanticTokensParams({
     required this.textDocument,
   });
 

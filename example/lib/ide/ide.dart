@@ -225,16 +225,18 @@ class _ContentAreaState extends State<ContentArea> {
   @override
   void initState() {
     super.initState();
+    final workspaceFiles = FileTree(EntityNode(
+      widget.workspace.directory,
+    ));
 
     _treeController = TreeController(
       roots: [
-        EntityNode(
-          widget.workspace.directory,
-        ),
+        workspaceFiles.root,
       ],
-      defaultExpansionState: true,
+      defaultExpansionState: false,
       childrenProvider: (EntityNode node) => node.children,
     );
+    _treeController.setExpansionState(workspaceFiles.root, true);
   }
 
   // When sufficient space:
@@ -351,8 +353,16 @@ class _ContentAreaState extends State<ContentArea> {
   }
 }
 
+class FileTree {
+  final EntityNode root;
+
+  FileTree(this.root) {
+    root.buildChildren();
+  }
+}
+
 class EntityNode {
-  const EntityNode(this.entity);
+  EntityNode(this.entity);
 
   final FileSystemEntity entity;
 
@@ -368,24 +378,30 @@ class EntityNode {
     return name;
   }
 
-  Iterable<EntityNode> get children {
-    if (entity is! Directory) {
-      return [];
+  List<EntityNode>? _children;
+  Iterable<EntityNode> get children => _children ?? const [];
+
+  void buildChildren() {
+    if (entity is Directory) {
+      final childEntities = (entity as Directory).listSync().map((entity) => EntityNode(entity)).toList();
+      childEntities.sort((EntityNode a, EntityNode b) {
+        if (a.entity is Directory && b.entity is! Directory) {
+          return -1;
+        }
+        if (b.entity is Directory && a.entity is! Directory) {
+          return 1;
+        }
+
+        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+      _children = childEntities;
+
+      for (final child in _children!) {
+        child.buildChildren();
+      }
+    } else {
+      _children = const [];
     }
-
-    final childEntities = (entity as Directory).listSync().map((entity) => EntityNode(entity)).toList();
-    childEntities.sort((EntityNode a, EntityNode b) {
-      if (a.entity is Directory && b.entity is! Directory) {
-        return -1;
-      }
-      if (b.entity is Directory && a.entity is! Directory) {
-        return 1;
-      }
-
-      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-    });
-    print("Children: $childEntities");
-    return childEntities;
   }
 
   @override

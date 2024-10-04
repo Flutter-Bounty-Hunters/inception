@@ -109,7 +109,7 @@ class LspClient with ChangeNotifier {
     );
   }
 
-  Future<SemanticTokens?> semanticTokens(SemanticTokensParms params) async {
+  Future<SemanticTokens?> semanticTokens(SemanticTokensParams params) async {
     final data = await _lspClientCommunication!.sendRequest(
       'textDocument/semanticTokens/full',
       params.toJson(),
@@ -191,10 +191,6 @@ class LspJsonRpcClient {
   }
 
   Future<void> sendNotification(String method, [Map<String, dynamic>? params]) async {
-    if (_lspProcess == null) {
-      throw Exception('LSP process not started. Did you forget to call start?');
-    }
-
     if (_lspProcess == null) {
       throw Exception('LSP process not started. Did you forget to call start?');
     }
