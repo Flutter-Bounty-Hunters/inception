@@ -85,8 +85,8 @@ class _LspPanelState extends State<LspPanel> {
         label = "Start Process";
       case LspClientStatus.started:
         label = "Initialize";
-        onPressed = () {
-          widget.workspace.lspClient.initialize(
+        onPressed = () async {
+          await widget.workspace.lspClient.initialize(
             InitializeParams(
               rootUri: 'file://${widget.workspace.directory.absolute.path}',
               capabilities: LspClientCapabilities(
@@ -96,6 +96,8 @@ class _LspPanelState extends State<LspPanel> {
                   ),
             ),
           );
+
+          await widget.workspace.lspClient.initialized();
         };
       case LspClientStatus.initializing:
         label = "Initialize";
