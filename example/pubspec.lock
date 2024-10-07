@@ -62,6 +62,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.0"
+  charcode:
+    dependency: transitive
+    description:
+      name: charcode
+      sha256: fb98c0f6d12c920a02ee2d998da788bca066ca5f148492b7085ee23372b12306
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.1"
   clock:
     dependency: transitive
     description:
@@ -214,7 +222,7 @@ packages:
     source: sdk
     version: "0.0.0"
   follow_the_leader:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: follow_the_leader
       sha256: "798baf5211ca2461c8462d4c8e94f57bf989758f8204056d607eb9a20f1cf794"
@@ -349,6 +357,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.1.2-main.4"
+  markdown:
+    dependency: transitive
+    description:
+      name: markdown
+      sha256: "39caf989ccc72c63e87b961851a74257141938599ed2db45fbd9403fee0db423"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.0"
   matcher:
     dependency: transitive
     description:
@@ -406,7 +422,7 @@ packages:
     source: hosted
     version: "2.1.0"
   path:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path
       sha256: "087ce49c3f0dc39180befefc60fdb4acd8f8620e5682fe2476afd0b3688bb4af"
@@ -595,14 +611,24 @@ packages:
       url: "git@github.com:superlistapp/super_editor.git"
     source: git
     version: "0.3.0-dev.5"
-  super_text_layout:
-    dependency: transitive
+  super_editor_markdown:
+    dependency: "direct main"
     description:
-      name: super_text_layout
-      sha256: b2b4320cdc22cef2e553e923db3a31c01b1e1469c6d990eec3770392e1086ff9
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.12"
+      path: super_editor_markdown
+      ref: HEAD
+      resolved-ref: f32e4a3fca07c616fd5082677a81131be5874a28
+      url: "git@github.com:superlistapp/super_editor.git"
+    source: git
+    version: "0.1.6"
+  super_text_layout:
+    dependency: "direct main"
+    description:
+      path: super_text_layout
+      ref: HEAD
+      resolved-ref: f32e4a3fca07c616fd5082677a81131be5874a28
+      url: "git@github.com:superlistapp/super_editor.git"
+    source: git
+    version: "0.1.14"
   syntax_highlight:
     dependency: "direct main"
     description:
@@ -735,10 +761,10 @@ packages:
     dependency: transitive
     description:
       name: vm_service
-      sha256: f652077d0bdf60abe4c1f6377448e8655008eef28f128bc023f7b5e8dfeb48fc
+      sha256: "5c5f338a667b4c644744b661f309fb8080bb94b18a7e91ef1dbd343bed00ed6d"
       url: "https://pub.dev"
     source: hosted
-    version: "14.2.4"
+    version: "14.2.5"
   watcher:
     dependency: transitive
     description:

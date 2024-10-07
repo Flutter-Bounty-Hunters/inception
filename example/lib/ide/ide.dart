@@ -644,26 +644,64 @@ class _ContentAreaState extends State<ContentArea> {
   Widget _buildHoverOverlay() {
     return Follower.withOffset(
       link: _hoverLink,
-      leaderAnchor: Alignment.topCenter,
-      followerAnchor: Alignment.bottomCenter,
+      leaderAnchor: Alignment.bottomLeft,
+      followerAnchor: Alignment.topLeft,
       offset: const Offset(0, -20),
+      boundary: ScreenFollowerBoundary(
+        screenSize: MediaQuery.sizeOf(context),
+        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      ),
       child: Container(
-        height: 300,
+        height: 200,
         width: 500,
+        margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: panelHighColor,
-          border: Border.all(color: Colors.white),
+          color: popoverBackgroundColor,
+          border: Border.all(color: popoverBorderColor),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              offset: Offset.zero,
+              blurRadius: 3,
+              color: Colors.black.withOpacity(0.5),
+            ),
+            BoxShadow(
+              offset: const Offset(0, 12),
+              blurRadius: 16,
+              color: Colors.black.withOpacity(0.5),
+            ),
+          ],
         ),
         child: CustomScrollView(
           slivers: [
-            ValueListenableBuilder(
-              valueListenable: _hoverPopoverDocument,
-              builder: (context, document, child) {
-                return SuperReader(
-                  document: document,
-                  stylesheet: defaultStylesheet.copyWith(addRulesAfter: [..._darkModeStyles]),
-                );
-              },
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: ValueListenableBuilder(
+                valueListenable: _hoverPopoverDocument,
+                builder: (context, document, child) {
+                  return SuperReader(
+                    document: document,
+                    stylesheet: defaultStylesheet.copyWith(
+                      addRulesAfter: [
+                        ..._darkModeStyles,
+                        StyleRule(
+                          BlockSelector.all,
+                          (doc, docNode) {
+                            return {
+                              Styles.maxWidth: double.infinity,
+                              Styles.padding: const CascadingPadding.symmetric(horizontal: 0),
+                              Styles.textStyle: const TextStyle(
+                                fontSize: 16,
+                                height: 1.2,
+                              ),
+                            };
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -739,6 +777,9 @@ class EntityNode {
 const panelHighColor = Color(0xFF292D30);
 const panelLowColor = Color(0xFF1C2022);
 const dividerColor = Color(0xFF1C2022);
+
+const popoverBackgroundColor = Color(0xFF202224);
+const popoverBorderColor = Color(0xFF34353A);
 
 // Makes text light, for use during dark mode styling.
 final _darkModeStyles = [
