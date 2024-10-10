@@ -68,3 +68,20 @@ class Range {
     );
   }
 }
+
+class Location {
+  Location({
+    required this.uri,
+    required this.range,
+  });
+
+  final String uri;
+  final Range range;
+
+  factory Location.fromJson(Map<String, dynamic> json) {
+    return Location(
+      uri: json['uri'],
+      range: Range.fromJson(json['range']),
+    );
+  }
+}

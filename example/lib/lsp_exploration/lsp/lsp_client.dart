@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
+import 'package:example/lsp_exploration/lsp/messages/go_to_definition.dart';
 import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
 import 'package:example/lsp_exploration/lsp/messages/semantic_tokens.dart';
@@ -88,6 +89,28 @@ class LspClient with ChangeNotifier {
       contents: data.value['contents'],
       range: data.value['range'] == null ? null : Range.fromJson(data.value['range']),
     );
+  }
+
+  Future<List<Location>?> goToDefinition(DefinitionsParams params) async {
+    final data = await _lspClientCommunication!.sendRequest(
+      'textDocument/definition',
+      params.toJson(),
+    );
+
+    if (data is LspNull) {
+      return null;
+    }
+
+    // TODO: The LSP spec defines that the return type might be multiple
+    // different objets. We are handling just the array case here,
+    // which seems to be the case for the dart LSP.
+    //
+    // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_typeDefinition
+    if (data is! LspArray) {
+      throw Exception('Unexpected response type: ${data.runtimeType}');
+    }
+
+    return data.value.map((json) => Location.fromJson(json)).toList();
   }
 
   Future<List<DocumentSymbol>?> documentSymbols(DocumentSymbolsParams params) async {
