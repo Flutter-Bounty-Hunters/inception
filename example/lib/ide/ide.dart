@@ -1,24 +1,15 @@
-import 'dart:async';
 import 'dart:io';
-import 'dart:math';
-import 'dart:ui';
 
+import 'package:example/ide/editor/editor.dart';
+import 'package:example/ide/file_explorer/file_explorer.dart';
 import 'package:example/ide/infrastructure/controls/toolbar_buttons.dart';
 import 'package:example/ide/lsp/lsp_panel.dart';
+import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
-import 'package:example/lsp_exploration/lsp/messages/hover.dart';
+import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
-import 'package:follow_the_leader/follow_the_leader.dart';
-import 'package:path/path.dart' as path;
-import 'package:super_editor/super_editor.dart';
-import 'package:super_editor_markdown/super_editor_markdown.dart';
-import 'package:syntax_highlight/syntax_highlight.dart';
 
 class IDE extends StatefulWidget {
   const IDE({
@@ -34,7 +25,36 @@ class IDE extends StatefulWidget {
 
 class _IDEState extends State<IDE> {
   bool _showLeftPane = true;
-  bool _showRightPane = true;
+  bool _showRightPane = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLspClient();
+  }
+
+  Future<void> _initLspClient() async {
+    await widget.workspace.lspClient.start();
+
+    await widget.workspace.lspClient.initialize(
+      InitializeParams(
+        rootUri: 'file://${widget.workspace.directory.absolute.path}',
+        capabilities: LspClientCapabilities(),
+      ),
+    );
+
+    await widget.workspace.lspClient.initialized();
+  }
+
+  Future<void> _restartLspClient() async {
+    widget.workspace.lspClient.stop();
+
+    await _initLspClient();
+  }
+
+  Future<void> _stopLspClient() async {
+    widget.workspace.lspClient.stop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,27 +64,36 @@ class _IDEState extends State<IDE> {
         style: const TextStyle(
           fontSize: 12,
         ),
-        child: Center(
-          child: Column(
-            children: [
-              _buildTopBar(),
-              Expanded(
-                child: Row(
-                  children: [
-                    const LeftBar(),
-                    Expanded(
-                      child: ContentArea(
-                        workspace: widget.workspace,
-                        showLeftPane: _showLeftPane,
-                        showRightPane: _showRightPane,
+        child: IconTheme(
+          data: const IconThemeData(
+            color: Colors.white,
+          ),
+          child: Center(
+            child: Column(
+              children: [
+                _buildTopBar(),
+                Expanded(
+                  child: Row(
+                    children: [
+                      const LeftBar(),
+                      Expanded(
+                        child: ContentArea(
+                          workspace: widget.workspace,
+                          showLeftPane: _showLeftPane,
+                          showRightPane: _showRightPane,
+                        ),
                       ),
-                    ),
-                    const RightBar(),
-                  ],
+                      const RightBar(),
+                    ],
+                  ),
                 ),
-              ),
-              const BottomBar(),
-            ],
+                BottomBar(
+                  lspClient: widget.workspace.lspClient,
+                  onLspRestartPressed: _restartLspClient,
+                  onLspStopPressed: _stopLspClient,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -170,7 +199,16 @@ class RightBar extends StatelessWidget {
 }
 
 class BottomBar extends StatelessWidget {
-  const BottomBar({super.key});
+  const BottomBar({
+    super.key,
+    required this.lspClient,
+    required this.onLspRestartPressed,
+    required this.onLspStopPressed,
+  });
+
+  final LspClient lspClient;
+  final VoidCallback onLspRestartPressed;
+  final VoidCallback onLspStopPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -186,26 +224,83 @@ class BottomBar extends StatelessWidget {
           ),
         ),
         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
-        child: const Row(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text("android_studio > lib > main.dart"),
-            Spacer(),
-            Text("119:22"),
-            SizedBox(width: 16),
-            Text("LF"),
-            SizedBox(width: 16),
-            Text("UTF-8"),
-            SizedBox(width: 16),
-            Icon(Icons.warning_amber, size: 14),
-            SizedBox(width: 16),
-            Text("2 spaces"),
-            SizedBox(width: 16),
-            Icon(Icons.lock_open_sharp, size: 14),
+            const Expanded(
+              child: Text("android_studio > lib > main.dart"),
+            ),
+            _buildLspControls(),
+            const Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text("119:22"),
+                  SizedBox(width: 16),
+                  Text("LF"),
+                  SizedBox(width: 16),
+                  Text("UTF-8"),
+                  SizedBox(width: 16),
+                  Icon(Icons.warning_amber, size: 14),
+                  SizedBox(width: 16),
+                  Text("2 spaces"),
+                  SizedBox(width: 16),
+                  Icon(Icons.lock_open_sharp, size: 14),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildLspControls() {
+    return ListenableBuilder(
+      listenable: lspClient,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text("LSP: $_lspClientStatus"),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: onLspRestartPressed,
+              child: const Icon(
+                Icons.refresh,
+                size: 14,
+                color: Colors.lightBlueAccent,
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: onLspStopPressed,
+              child: const Icon(
+                Icons.stop,
+                size: 14,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String get _lspClientStatus {
+    switch (lspClient.status) {
+      case LspClientStatus.notRunning:
+        return "Not Running";
+      case LspClientStatus.starting:
+        return "Starting";
+      case LspClientStatus.started:
+        return "Started";
+      case LspClientStatus.initializing:
+        return "Initializing";
+      case LspClientStatus.initialized:
+        return "Initialized";
+    }
   }
 }
 
@@ -227,241 +322,12 @@ class ContentArea extends StatefulWidget {
 }
 
 class _ContentAreaState extends State<ContentArea> {
-  double _desiredLeftPaneWidth = 450;
+  double _desiredLeftPaneWidth = 350;
 
   double _desiredRightPaneWidth = 250;
 
-  late final TreeController<EntityNode> _treeController;
-
   final _fileContent = ValueNotifier<String>("");
   final _currentFile = ValueNotifier<File?>(null);
-
-  final _textKey = GlobalKey();
-
-  Timer? _hoverTimer;
-
-  /// Shows/hides the overlay that displays information about the hovered text.
-  final _hoverOverlayController = OverlayPortalController();
-
-  /// The document to display in the hover overlay.
-  final _hoverPopoverDocument = ValueNotifier<Document>(MutableDocument());
-
-  /// The rect of the word that is currently being hovered.
-  final _hoveredFocalPoint = ValueNotifier<Rect?>(null);
-
-  /// Link to display a popover near to the focal point.
-  final _hoverLink = LeaderLink();
-
-  int? _latestHoveredTextOffset;
-
-  Highlighter? _highlighter;
-
-  double _fontSize = 24;
-
-  final _focusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    final workspaceFiles = FileTree(EntityNode(
-      widget.workspace.directory,
-    ));
-
-    _treeController = TreeController(
-      roots: [
-        workspaceFiles.root,
-      ],
-      defaultExpansionState: false,
-      childrenProvider: (EntityNode node) => node.children,
-    );
-    _treeController.setExpansionState(workspaceFiles.root, true);
-
-    _initializeSyntaxHighlighting();
-  }
-
-  @override
-  void dispose() {
-    _hoverTimer?.cancel();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  Future<void> _initializeSyntaxHighlighting() async {
-    await Highlighter.initialize(['dart', 'yaml']);
-
-    var theme = await HighlighterTheme.loadDarkTheme();
-
-    _highlighter = Highlighter(
-      language: 'dart',
-      theme: theme,
-    );
-  }
-
-  Future<void> _hoverAtTextOffset(int offset) async {
-    final text = _fileContent.value;
-
-    if (_shouldAbortCurrentHoverRequest(offset)) {
-      return;
-    }
-
-    final (line, character) = _getLineAndCharacterForOffset(text, offset);
-
-    final filePath = _currentFile.value!.isAbsolute //
-        ? _currentFile.value!.path
-        : path.absolute(_currentFile.value!.path);
-
-    final res = await widget.workspace.lspClient.hover(
-      HoverParams(
-        textDocument: TextDocumentIdentifier(
-          uri: "file://$filePath",
-        ),
-        position: Position(
-          line: line,
-          character: character,
-        ),
-      ),
-    );
-
-    if (res == null) {
-      return;
-    }
-
-    if (_shouldAbortCurrentHoverRequest(offset)) {
-      return;
-    }
-
-    // TODO: see if we can declare contents as string in the Hover class.
-    final context = res.contents as String;
-
-    _hoverPopoverDocument.value = deserializeMarkdownToDocument(
-      context,
-      encodeHtml: true,
-    );
-
-    if (context.isEmpty) {
-      if (_hoverOverlayController.isShowing) {
-        _hoverOverlayController.hide();
-      }
-      return;
-    }
-
-    if (!_hoverOverlayController.isShowing) {
-      _hoverOverlayController.show();
-    }
-  }
-
-  (int line, int character) _getLineAndCharacterForOffset(String text, int offset) {
-    if (text.isEmpty) {
-      return (0, 0);
-    }
-
-    int lineNumber = 0;
-    int charNumberInLine = 0;
-
-    int currentOffset = 0;
-
-    final lines = text.split('\n');
-    for (int i = 0; i < lines.length; i++) {
-      final lineLength = lines[i].length;
-
-      if (currentOffset + lineLength >= offset) {
-        charNumberInLine = offset - currentOffset;
-        lineNumber = i;
-        break;
-      }
-
-      currentOffset += lineLength + 1;
-    }
-
-    return (lineNumber, charNumberInLine);
-  }
-
-  void _onHover(PointerHoverEvent event) {
-    if (widget.workspace.lspClient.status != LspClientStatus.initialized) {
-      return;
-    }
-
-    final openedFile = _currentFile.value;
-    if (openedFile == null) {
-      _hoverOverlayController.hide();
-      return;
-    }
-
-    if (_fileContent.value.isEmpty) {
-      _hoverOverlayController.hide();
-      return;
-    }
-
-    final renderParagraph = _textKey.currentContext?.findRenderObject() as RenderParagraph?;
-    if (renderParagraph == null) {
-      _hoverOverlayController.hide();
-      return;
-    }
-
-    final localPosition = renderParagraph.globalToLocal(event.position);
-    final textPosition = renderParagraph.getPositionForOffset(localPosition);
-    if (textPosition.offset < 0) {
-      _hoverOverlayController.hide();
-      return;
-    }
-
-    final wordRange = renderParagraph.getWordBoundary(textPosition);
-    final boxes = renderParagraph.getBoxesForSelection(
-      TextSelection(
-        baseOffset: wordRange.start,
-        extentOffset: wordRange.end,
-      ),
-      boxHeightStyle: BoxHeightStyle.max,
-      boxWidthStyle: BoxWidthStyle.max,
-    );
-
-    if (boxes.isNotEmpty) {
-      final newFocalPoint = boxes.first.toRect();
-      if (newFocalPoint != _hoveredFocalPoint.value) {
-        // We are now hovering another word. Hide the overlay, it will be shown again after
-        // querying the new hover popover text.
-        _hoverOverlayController.hide();
-      }
-
-      _hoveredFocalPoint.value = newFocalPoint;
-    }
-
-    _latestHoveredTextOffset = textPosition.offset;
-
-    _hoverTimer?.cancel();
-    _hoverTimer = Timer(
-      const Duration(milliseconds: 500),
-      () => _hoverAtTextOffset(textPosition.offset),
-    );
-  }
-
-  bool _shouldAbortCurrentHoverRequest(int hoveredTextOffset) {
-    if (!mounted) {
-      return true;
-    }
-
-    if (_currentFile.value == null) {
-      // There isn't any opened file to hover on.
-      return true;
-    }
-
-    if (hoveredTextOffset != _latestHoveredTextOffset) {
-      // The user hovered another position while the hover request was happening. Ignore the results,
-      // because a new request will happen.
-      return true;
-    }
-
-    return false;
-  }
-
-  int _computeFontIncrement() {
-    return switch (_fontSize) {
-      <= 24 => 1,
-      <= 48 => 2,
-      <= 96 => 3,
-      _ => 4,
-    };
-  }
 
   // When sufficient space:
   //  1. Take up all desired space for left pane and right pane (e.g., project explorer, device manager).
@@ -483,14 +349,46 @@ class _ContentAreaState extends State<ContentArea> {
                 right: BorderSide(color: dividerColor),
               ),
             ),
-            child: _buildLeftPaneContent(),
+            child: FileExplorer(
+              directory: widget.workspace.directory,
+              onFileOpenRequested: (file) {
+                _fileContent.value = file.readAsStringSync();
+                _currentFile.value = file;
+
+                String languageId = "dart";
+                if (file.path.endsWith(".md")) {
+                  languageId = "markdown";
+                } else if (file.path.endsWith(".yaml")) {
+                  languageId = "yaml";
+                }
+
+                widget.workspace.lspClient.didOpenTextDocument(
+                  DidOpenTextDocumentParams(
+                    textDocument: TextDocumentItem(
+                      uri: "file://${file.path}",
+                      languageId: languageId,
+                      version: 1,
+                      text: file.readAsStringSync(),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         Expanded(
           child: Container(
             width: double.infinity,
             height: double.infinity,
             color: panelLowColor,
-            child: _buildFileContent(),
+            child: ValueListenableBuilder(
+              valueListenable: _currentFile,
+              builder: (context, child, value) {
+                return IdeEditor(
+                  lspClient: widget.workspace.lspClient,
+                  sourceFile: _currentFile.value,
+                );
+              },
+            ),
           ),
         ),
         if (widget.showRightPane)
@@ -501,306 +399,9 @@ class _ContentAreaState extends State<ContentArea> {
                 right: BorderSide(color: dividerColor),
               ),
             ),
-            child: _buildRightPaneContent(),
+            child: const SizedBox(),
           ),
       ],
     );
   }
-
-  Widget _buildLeftPaneContent() {
-    return AnimatedTreeView<EntityNode>(
-      padding: const EdgeInsets.all(24),
-      treeController: _treeController,
-      nodeBuilder: (BuildContext context, TreeEntry<EntityNode> entry) {
-        return InkWell(
-          onTap: () {
-            if (entry.node.isDirectory) {
-              _treeController.toggleExpansion(entry.node);
-              return;
-            }
-
-            final file = entry.node.entity as File;
-            _fileContent.value = file.readAsStringSync();
-            _currentFile.value = file;
-
-            String languageId = "dart";
-            if (file.path.endsWith(".md")) {
-              languageId = "markdown";
-            } else if (file.path.endsWith(".yaml")) {
-              languageId = "yaml";
-            }
-
-            widget.workspace.lspClient.didOpenTextDocument(
-              DidOpenTextDocumentParams(
-                textDocument: TextDocumentItem(
-                  uri: "file://${file.path}",
-                  languageId: languageId,
-                  version: 1,
-                  text: file.readAsStringSync(),
-                ),
-              ),
-            );
-          },
-          child: TreeIndentation(
-            entry: entry,
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(entry.node.title),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFileContent() {
-    return Actions(
-      actions: {
-        IncreaseFontSizeIntent: CallbackAction<IncreaseFontSizeIntent>(
-          onInvoke: (intent) => setState(() {
-            _fontSize += _computeFontIncrement();
-          }),
-        ),
-        DecreaseFontSizeIntent: CallbackAction<DecreaseFontSizeIntent>(
-          onInvoke: (intent) => setState(() {
-            _fontSize = max(_fontSize - _computeFontIncrement(), 8);
-          }),
-        ),
-      },
-      child: Shortcuts(
-        shortcuts: {
-          LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.equal): const IncreaseFontSizeIntent(),
-          LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus): const DecreaseFontSizeIntent(),
-        },
-        child: Focus(
-          focusNode: _focusNode,
-          autofocus: true,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: ValueListenableBuilder(
-                valueListenable: _fileContent,
-                builder: (context, value, child) {
-                  if (_highlighter == null) {
-                    return const SizedBox();
-                  }
-
-                  final highlightedCode = _highlighter!.highlight(_fileContent.value);
-
-                  return MouseRegion(
-                    cursor: SystemMouseCursors.text,
-                    onHover: _onHover,
-                    onExit: (event) => _hoverOverlayController.hide(),
-                    child: OverlayPortal(
-                      controller: _hoverOverlayController,
-                      overlayChildBuilder: (context) => _buildHoverOverlay(),
-                      child: Stack(
-                        children: [
-                          ValueListenableBuilder(
-                            valueListenable: _hoveredFocalPoint,
-                            builder: (context, value, child) {
-                              if (value == null) {
-                                return const SizedBox();
-                              }
-
-                              return Positioned(
-                                top: _hoveredFocalPoint.value!.top,
-                                left: _hoveredFocalPoint.value!.left,
-                                child: Leader(
-                                  link: _hoverLink,
-                                  child: SizedBox(
-                                    width: _hoveredFocalPoint.value!.width,
-                                    height: _hoveredFocalPoint.value!.height,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          Text.rich(
-                            highlightedCode,
-                            key: _textKey,
-                            style: TextStyle(
-                              fontSize: _fontSize,
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRightPaneContent() {
-    return LspPanel(workspace: widget.workspace);
-  }
-
-  Widget _buildHoverOverlay() {
-    return Follower.withOffset(
-      link: _hoverLink,
-      leaderAnchor: Alignment.bottomLeft,
-      followerAnchor: Alignment.topLeft,
-      offset: const Offset(0, -20),
-      boundary: ScreenFollowerBoundary(
-        screenSize: MediaQuery.sizeOf(context),
-        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-      ),
-      child: Container(
-        height: 200,
-        width: 500,
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: popoverBackgroundColor,
-          border: Border.all(color: popoverBorderColor),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              offset: Offset.zero,
-              blurRadius: 3,
-              color: Colors.black.withOpacity(0.5),
-            ),
-            BoxShadow(
-              offset: const Offset(0, 12),
-              blurRadius: 16,
-              color: Colors.black.withOpacity(0.5),
-            ),
-          ],
-        ),
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: ValueListenableBuilder(
-                valueListenable: _hoverPopoverDocument,
-                builder: (context, document, child) {
-                  return SuperReader(
-                    document: document,
-                    stylesheet: defaultStylesheet.copyWith(
-                      addRulesAfter: [
-                        ..._darkModeStyles,
-                        StyleRule(
-                          BlockSelector.all,
-                          (doc, docNode) {
-                            return {
-                              Styles.maxWidth: double.infinity,
-                              Styles.padding: const CascadingPadding.symmetric(horizontal: 0),
-                              Styles.textStyle: const TextStyle(
-                                fontSize: 16,
-                                height: 1.2,
-                              ),
-                            };
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class FileTree {
-  final EntityNode root;
-
-  FileTree(this.root) {
-    root.buildChildren();
-  }
-}
-
-class EntityNode {
-  EntityNode(this.entity);
-
-  final FileSystemEntity entity;
-
-  bool get isDirectory => entity is Directory;
-
-  String get title {
-    final name = entity.uri.pathSegments.reversed.where((segment) => segment.trim().isNotEmpty).firstOrNull;
-    if (name == null) {
-      return "";
-    }
-    if (entity is Directory) {
-      return "$name/";
-    }
-
-    return name;
-  }
-
-  List<EntityNode>? _children;
-  Iterable<EntityNode> get children => _children ?? const [];
-
-  void buildChildren() {
-    if (entity is Directory) {
-      final childEntities = (entity as Directory).listSync().map((entity) => EntityNode(entity)).toList();
-      childEntities.sort((EntityNode a, EntityNode b) {
-        if (a.entity is Directory && b.entity is! Directory) {
-          return -1;
-        }
-        if (b.entity is Directory && a.entity is! Directory) {
-          return 1;
-        }
-
-        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-      });
-      _children = childEntities;
-
-      for (final child in _children!) {
-        child.buildChildren();
-      }
-    } else {
-      _children = const [];
-    }
-  }
-
-  @override
-  String toString() => title;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) || other is EntityNode && runtimeType == other.runtimeType && entity == other.entity;
-
-  @override
-  int get hashCode => entity.hashCode;
-}
-
-const panelHighColor = Color(0xFF292D30);
-const panelLowColor = Color(0xFF1C2022);
-const dividerColor = Color(0xFF1C2022);
-
-const popoverBackgroundColor = Color(0xFF202224);
-const popoverBorderColor = Color(0xFF34353A);
-
-// Makes text light, for use during dark mode styling.
-final _darkModeStyles = [
-  StyleRule(
-    BlockSelector.all,
-    (doc, docNode) {
-      return {
-        Styles.textStyle: const TextStyle(
-          fontSize: 18,
-          fontFamily: 'Courier New',
-          color: Colors.white,
-        ),
-      };
-    },
-  ),
-];
-
-class IncreaseFontSizeIntent extends Intent {
-  const IncreaseFontSizeIntent();
-}
-
-class DecreaseFontSizeIntent extends Intent {
-  const DecreaseFontSizeIntent();
 }
