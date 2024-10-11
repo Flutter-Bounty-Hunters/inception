@@ -250,6 +250,12 @@ class _FileExplorerState extends State<FileExplorer> {
           setState(() {
             _selectedNode = node;
           });
+
+          if(node.isFile){
+            // Open document.
+            widget.onFileOpenRequested(node.asFile);
+          }
+
         },
       ),
       DoubleTapGestureRecognizer: GestureRecognizerFactoryWithHandlers<DoubleTapGestureRecognizer>(
