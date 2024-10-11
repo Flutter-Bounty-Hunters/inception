@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:example/ide/editor/syntax_highlighting.dart';
 import 'package:example/ide/infrastructure/keyboard_shortcuts.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
@@ -61,6 +62,8 @@ class _IdeEditorState extends State<IdeEditor> {
 
   final _fileContent = ValueNotifier<String>("");
 
+  var _styledLines = <TextSpan>[];
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +72,8 @@ class _IdeEditorState extends State<IdeEditor> {
       _fileContent.value = widget.sourceFile!.readAsStringSync();
     }
     _initializeSyntaxHighlighting();
+
+    _fileContent.addListener(_onFileContentChange);
   }
 
   @override
@@ -97,6 +102,23 @@ class _IdeEditorState extends State<IdeEditor> {
       language: 'dart',
       theme: theme,
     );
+  }
+
+  void _onFileContentChange() {
+    _highlightSyntax();
+  }
+
+  void _highlightSyntax() {
+    setState(() {
+      _styledLines = highlightSyntaxByLine(_highlighter!, _fileContent.value);
+
+      print("Displaying ${_styledLines.length} styled lines");
+      for (final span in _styledLines) {
+        final buffer = StringBuffer();
+        span.computeToPlainText(buffer);
+        print("Line: '${buffer.toString()}'");
+      }
+    });
   }
 
   Future<void> _hoverAtTextOffset(int offset) async {
@@ -333,53 +355,22 @@ class _IdeEditorState extends State<IdeEditor> {
         child: Focus(
           focusNode: _focusNode,
           autofocus: true,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: ValueListenableBuilder(
-                valueListenable: _fileContent,
-                builder: (context, value, child) {
-                  if (_highlighter == null) {
-                    return const SizedBox();
-                  }
-
-                  //final highlightedCode = _highlighter!.highlight(_fileContent.value);
-
-                  return MouseRegion(
-                    cursor: SystemMouseCursors.text,
-                    //onHover: _onHover,
-                    onExit: (event) => _hoverOverlayController.hide(),
-                    child: OverlayPortal(
-                      controller: _hoverOverlayController,
-                      overlayChildBuilder: (context) => _buildHoverOverlay(),
-                      child: Stack(
-                        children: [
-                          ValueListenableBuilder(
-                            valueListenable: _hoveredFocalPoint,
-                            builder: (context, value, child) {
-                              if (value == null) {
-                                return const SizedBox();
-                              }
-
-                              return Positioned(
-                                top: _hoveredFocalPoint.value!.top,
-                                left: _hoveredFocalPoint.value!.left,
-                                child: Leader(
-                                  link: _hoverLink,
-                                  child: SizedBox(
-                                    width: _hoveredFocalPoint.value!.width,
-                                    height: _hoveredFocalPoint.value!.height,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          _buildCodeArea(),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+          child: InteractiveViewer(
+            constrained: false,
+            scaleEnabled: false,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.text,
+              onHover: _onHover,
+              onExit: (event) => _hoverOverlayController.hide(),
+              child: OverlayPortal(
+                controller: _hoverOverlayController,
+                overlayChildBuilder: (context) => _buildHoverOverlay(),
+                child: Stack(
+                  children: [
+                    _buildCursorHoverLeader(),
+                    _buildCodeArea(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -388,134 +379,40 @@ class _IdeEditorState extends State<IdeEditor> {
     );
   }
 
-  Widget _buildCodeArea() {
-    return _buildLines(_fileContent.value);
-// GestureDetector(
-//                             onTapUp: _onTapUp,
-//                             child: Text.rich(
-//                               highlightedCode,
-//                               key: _textKey,
-//                               style: TextStyle(
-//                                 fontFamily: 'Courier New',
-//                                 fontSize: _fontSize,
-//                                 height: 1.5,
-//                               ),
-//                             ),
-//                           ),
+  Widget _buildCursorHoverLeader() {
+    return ValueListenableBuilder(
+      valueListenable: _hoveredFocalPoint,
+      builder: (context, value, child) {
+        if (value == null) {
+          return const SizedBox();
+        }
+
+        return Positioned(
+          top: _hoveredFocalPoint.value!.top,
+          left: _hoveredFocalPoint.value!.left,
+          child: Leader(
+            link: _hoverLink,
+            child: SizedBox(
+              width: _hoveredFocalPoint.value!.width,
+              height: _hoveredFocalPoint.value!.height,
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  Widget _buildLines(String codeSnippet) {
-    final codeLines = codeSnippet.split("\n");
-    final newlineMatcher = RegExp(r'\n');
-    final newlineOffsets = newlineMatcher.allMatches(codeSnippet).map((match) => match.start).toList();
-    print("Newline offset: $newlineOffsets");
+  Widget _buildCodeArea() {
+    return _buildLines();
+  }
 
-    final highlightedText = _highlighter!.highlight(codeSnippet);
-
-    // Move through every styled span and break the spans apart by line.
-    final styledLines = <TextSpan>[];
-    final spanStack = <TextSpan>[highlightedText];
-
-    TextSpan currentLine = TextSpan(
-      text: "",
-      children: [],
-    );
-    styledLines.add(currentLine);
-    int currentOffset = 0;
-
-    final debugBuffer = StringBuffer();
-
-    while (spanStack.isNotEmpty) {
-      final span = spanStack.removeAt(0);
-
-      if (span.children != null) {
-        spanStack.insertAll(0, span.children!.whereType<TextSpan>());
-      }
-
-      if (span.text == null) {
-        continue;
-      }
-
-      // print("Span: '${span.text}' - start offset: $currentOffset");
-
-      span.computeToPlainText(debugBuffer);
-      debugBuffer.writeln();
-
-      final endOfSpan = currentOffset + span.text!.length;
-
-      if (newlineOffsets.isEmpty || endOfSpan <= newlineOffsets.first) {
-        // All the content in this span belongs to the current line. Append it.
-        currentLine.children!.add(span);
-        print(
-            "Appending text: '${span.text!}' - global offset: $currentOffset -> ${currentOffset + span.text!.length}");
-        currentOffset += span.text!.length;
-        continue;
-      }
-
-      while (newlineOffsets.isNotEmpty && endOfSpan > newlineOffsets.first) {
-        // The next newline appears somewhere in this span.
-        final nextNewline = newlineOffsets.removeAt(0);
-        print("Processing newline at $nextNewline - end of text span: $endOfSpan");
-
-        if (nextNewline - currentOffset > 0) {
-          // Copy the styled text from the current offset to the next newline.
-          print("Appending text: '${span.text!}' - global offset: $currentOffset -> ${nextNewline - 1}");
-
-          // Copy the text in this span before the newline.
-          currentLine.children!.add(
-            TextSpan(
-              text: span.text!.substring(0, nextNewline - currentOffset),
-              style: span.style?.copyWith(fontSize: _fontSize),
-            ),
-          );
-        }
-
-        final buffer = StringBuffer();
-        currentLine.computeToPlainText(buffer);
-        print("Committing line: '${buffer.toString()}'");
-
-        // Create a new line to append to.
-        currentLine = TextSpan(text: "", children: []);
-        styledLines.add(currentLine);
-
-        if (endOfSpan > nextNewline + 1 && endOfSpan < newlineOffsets.first) {
-          print(
-              "Copy after newline - newline offset: $nextNewline, current offset: $currentOffset, end of span: $endOfSpan, span length: ${span.text!.length}, next newline: ${newlineOffsets.first}");
-          print("Text after newline: '${span.text!.substring((nextNewline - currentOffset) + 1)}'");
-          // Copy the text in this span after the newline.
-          currentLine.children!.add(
-            TextSpan(
-              text: span.text!.substring((nextNewline - currentOffset) + 1),
-              style: span.style?.copyWith(fontSize: _fontSize),
-            ),
-          );
-
-          // Move the current offset to the character after the text we just copied.
-          currentOffset = endOfSpan;
-        } else {
-          // Move the current offset to the character after the newline we just processed.
-          currentOffset = nextNewline + 1;
-        }
-      }
-    }
-
-    print("Displaying ${styledLines.length} styled lines");
-    for (final span in styledLines) {
-      final buffer = StringBuffer();
-      span.computeToPlainText(buffer);
-      print("Line: '${buffer.toString()}'");
-    }
-
-    print("");
-    print("");
-    print("All non-null spans:");
-    print(debugBuffer);
-
+  Widget _buildLines() {
     return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (int i = 0; i < styledLines.length; i += 1) //
-          // _buildLine(i, codeLines[i]),
-          _buildLine(i, styledLines[i]),
+        for (int i = 0; i < _styledLines.length; i += 1) //
+          _buildLine(i, _styledLines[i]),
       ],
     );
   }
@@ -537,6 +434,7 @@ class _IdeEditorState extends State<IdeEditor> {
     return Stack(
       children: [
         Row(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(width: 100 + 8),
@@ -558,6 +456,7 @@ class _IdeEditorState extends State<IdeEditor> {
           ],
         ),
         Row(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
@@ -574,11 +473,9 @@ class _IdeEditorState extends State<IdeEditor> {
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text.rich(
-                content,
-                style: _baseCodeStyle,
-              ),
+            Text.rich(
+              content,
+              style: _baseCodeStyle,
             ),
           ],
         ),
@@ -658,7 +555,7 @@ class _IdeEditorState extends State<IdeEditor> {
 const _baseCodeStyle = TextStyle(
   color: Colors.white,
   fontFamily: "SourceCodePro",
-  fontSize: 24,
+  fontSize: 16,
   fontWeight: FontWeight.w900,
 );
 
