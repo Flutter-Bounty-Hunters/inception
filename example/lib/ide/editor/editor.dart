@@ -7,6 +7,7 @@ import 'package:example/ide/infrastructure/keyboard_shortcuts.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
+import 'package:example/lsp_exploration/lsp/messages/go_to_definition.dart';
 import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -22,10 +23,12 @@ class IdeEditor extends StatefulWidget {
     super.key,
     required this.lspClient,
     required this.sourceFile,
+    this.onGoToDefinition,
   });
 
   final LspClient lspClient;
   final File? sourceFile;
+  final void Function(String uri, Range range)? onGoToDefinition;
 
   @override
   State<IdeEditor> createState() => _IdeEditorState();
@@ -267,6 +270,46 @@ class _IdeEditorState extends State<IdeEditor> {
     };
   }
 
+  Future<void> _onTapUp(TapUpDetails details) async {
+    final sourceFile = widget.sourceFile;
+    if (sourceFile == null) {
+      return;
+    }
+    final renderParagraph = _textKey.currentContext?.findRenderObject() as RenderParagraph?;
+    if (renderParagraph == null) {
+      return;
+    }
+
+    final localPosition = renderParagraph.globalToLocal(details.globalPosition);
+    final textPosition = renderParagraph.getPositionForOffset(localPosition);
+    if (textPosition.offset < 0) {
+      return;
+    }
+
+    //final wordRange = renderParagraph.getWordBoundary(textPosition);
+    final text = _fileContent.value;
+    final (line, character) = _getLineAndCharacterForOffset(text, textPosition.offset);
+
+    final filePath = sourceFile.isAbsolute //
+        ? sourceFile.path
+        : path.absolute(sourceFile.path);
+
+    final res = await widget.lspClient.goToDefinition(DefinitionsParams(
+      textDocument: TextDocumentIdentifier(
+        uri: "file://$filePath",
+      ),
+      position: Position(
+        line: line,
+        character: character,
+      ),
+    ));
+    if (res == null || res.isEmpty) {
+      return;
+    }
+
+    widget.onGoToDefinition?.call(res.first.uri, res.first.range);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Actions(
@@ -304,7 +347,7 @@ class _IdeEditorState extends State<IdeEditor> {
 
                   return MouseRegion(
                     cursor: SystemMouseCursors.text,
-                    onHover: _onHover,
+                    //onHover: _onHover,
                     onExit: (event) => _hoverOverlayController.hide(),
                     child: OverlayPortal(
                       controller: _hoverOverlayController,
@@ -331,13 +374,16 @@ class _IdeEditorState extends State<IdeEditor> {
                               );
                             },
                           ),
-                          Text.rich(
-                            highlightedCode,
-                            key: _textKey,
-                            style: TextStyle(
-                              fontFamily: 'Courier New',
-                              fontSize: _fontSize,
-                              height: 1.5,
+                          GestureDetector(
+                            onTapUp: _onTapUp,
+                            child: Text.rich(
+                              highlightedCode,
+                              key: _textKey,
+                              style: TextStyle(
+                                fontFamily: 'Courier New',
+                                fontSize: _fontSize,
+                                height: 1.5,
+                              ),
                             ),
                           ),
                         ],

@@ -7,6 +7,7 @@ import 'package:example/ide/lsp/lsp_panel.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
+import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
 import 'package:flutter/material.dart';
@@ -329,6 +330,10 @@ class _ContentAreaState extends State<ContentArea> {
   final _fileContent = ValueNotifier<String>("");
   final _currentFile = ValueNotifier<File?>(null);
 
+  void _onGoToDefinition(String uri, Range range) {
+    _currentFile.value = File.fromUri(Uri.parse(uri));
+  }
+
   // When sufficient space:
   //  1. Take up all desired space for left pane and right pane (e.g., project explorer, device manager).
   //  2. Take up remaining space with tabs + code editor.
@@ -386,6 +391,7 @@ class _ContentAreaState extends State<ContentArea> {
                 return IdeEditor(
                   lspClient: widget.workspace.lspClient,
                   sourceFile: _currentFile.value,
+                  onGoToDefinition: _onGoToDefinition,
                 );
               },
             ),
