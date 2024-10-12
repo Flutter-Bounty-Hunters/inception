@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:example/ide/editor/code_lines_layout.dart';
 import 'package:example/ide/editor/syntax_highlighting.dart';
 import 'package:example/ide/infrastructure/keyboard_shortcuts.dart';
 import 'package:example/ide/theme.dart';
@@ -368,7 +369,11 @@ class _IdeEditorState extends State<IdeEditor> {
                 child: Stack(
                   children: [
                     _buildCursorHoverLeader(),
-                    _buildCodeArea(),
+                    CodeLines(
+                      codeLines: _styledLines,
+                      indentLineColor: _lineColor,
+                      baseTextStyle: _baseCodeStyle,
+                    ),
                   ],
                 ),
               ),
@@ -399,87 +404,6 @@ class _IdeEditorState extends State<IdeEditor> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildCodeArea() {
-    return _buildLines();
-  }
-
-  Widget _buildLines() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (int i = 0; i < _styledLines.length; i += 1) //
-          _buildLine(i, _styledLines[i]),
-      ],
-    );
-  }
-
-  Widget _buildLine(int index, TextSpan content) {
-    final buffer = StringBuffer();
-    content.computeToPlainText(buffer);
-    final contentText = buffer.toString();
-
-    final leadingSpaceMatcher = RegExp(r'\s+');
-    final leadingSpaceMatch = leadingSpaceMatcher.matchAsPrefix(contentText);
-    int tabCount = 0;
-    if (leadingSpaceMatch != null) {
-      // -1 because the very first indentation line is the same as the divider between lines and code.
-      tabCount = (leadingSpaceMatch.end ~/ 2) - 1;
-    }
-    // print("Line $index - tab: $tabCount - '$content'");
-
-    return Stack(
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(width: 100 + 8),
-            for (int i = 0; i < tabCount; i += 1) //
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(
-                      color: _lineColor,
-                      width: 1,
-                    ),
-                  ),
-                ),
-                child: Text(
-                  "  ",
-                  style: _baseCodeStyle,
-                ),
-              ),
-          ],
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 100,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 64),
-                child: Text(
-                  "${index + 1}",
-                  textAlign: TextAlign.right,
-                  style: _baseCodeStyle.copyWith(
-                    color: Colors.white.withOpacity(0.3),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text.rich(
-              content,
-              style: _baseCodeStyle,
-            ),
-          ],
-        ),
-      ],
     );
   }
 
