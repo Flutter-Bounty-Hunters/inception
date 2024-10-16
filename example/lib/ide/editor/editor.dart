@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
-import 'package:example/ide/editor/code_lines_layout.dart';
+import 'package:example/ide/editor/code_layout.dart';
 import 'package:example/ide/editor/syntax_highlighting.dart';
 import 'package:example/ide/infrastructure/keyboard_shortcuts.dart';
 import 'package:example/ide/theme.dart';
@@ -37,6 +37,7 @@ class IdeEditor extends StatefulWidget {
 }
 
 class _IdeEditorState extends State<IdeEditor> {
+  final _linesKey = GlobalKey();
   final _textKey = GlobalKey();
 
   Timer? _hoverTimer;
@@ -222,6 +223,16 @@ class _IdeEditorState extends State<IdeEditor> {
       return;
     }
 
+    print("_onHover()");
+    final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(event.localPosition);
+    print(" - local offset: ${event.localPosition}");
+    print(" - global offset: $globalOffset");
+    final codeLines = _linesKey.asCodeLines;
+    final hoverPosition = codeLines.findCodePositionNearestGlobalOffset(globalOffset);
+    print(" - hover position: $hoverPosition");
+    final hoverWordRange = codeLines.findWordBoundaryAtGlobalOffset(globalOffset);
+    print(" - hover word range: $hoverWordRange");
+
     final renderParagraph = _textKey.currentContext?.findRenderObject() as RenderParagraph?;
     if (renderParagraph == null) {
       _hoverOverlayController.hide();
@@ -360,7 +371,6 @@ class _IdeEditorState extends State<IdeEditor> {
             constrained: false,
             scaleEnabled: false,
             child: MouseRegion(
-              cursor: SystemMouseCursors.text,
               onHover: _onHover,
               onExit: (event) => _hoverOverlayController.hide(),
               child: OverlayPortal(
@@ -369,10 +379,14 @@ class _IdeEditorState extends State<IdeEditor> {
                 child: Stack(
                   children: [
                     _buildCursorHoverLeader(),
-                    CodeLines(
-                      codeLines: _styledLines,
-                      indentLineColor: _lineColor,
-                      baseTextStyle: _baseCodeStyle,
+                    GestureDetector(
+                      onTapUp: _onTapUp,
+                      child: CodeLines(
+                        key: _linesKey,
+                        codeLines: _styledLines,
+                        indentLineColor: _lineColor,
+                        baseTextStyle: _baseCodeStyle,
+                      ),
                     ),
                   ],
                 ),
