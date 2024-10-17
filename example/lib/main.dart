@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:example/ide/ide.dart';
+import 'package:example/ide/infrastructure/user_settings.dart';
 import 'package:example/ide/workspace.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -12,6 +14,12 @@ void main() {
   );
 }
 
+enum SetupState {
+  start,
+  noValidDirectory,
+  showIde,
+}
+
 class _Screen extends StatefulWidget {
   const _Screen();
 
@@ -20,19 +28,50 @@ class _Screen extends StatefulWidget {
 }
 
 class _ScreenState extends State<_Screen> {
-  final _workspace = Workspace(
-    // Currently, the workspace directory is pulled from a variable defined by
-    // the run command so that different developers can open up directories on
-    // their respective machines.
-    Directory(const String.fromEnvironment("CONTENT_DIRECTORY")),
-  );
+  late final Workspace _workspace;
+
+  final setupNotifier = ValueNotifier(SetupState.start);
+
+  @override
+  void initState() {
+    super.initState();
+    _setupWorkspace();
+  }
+
+  Future<void> _setupWorkspace() async {
+    final settings = UserSettings();
+    await settings.init();
+    var path = settings.contentDirectory;
+    path ??= await FilePicker.platform.getDirectoryPath();
+    if (path == null) {
+      setupNotifier.value = SetupState.noValidDirectory;
+      return;
+    }
+    settings.setContentDirectory(path);
+    _workspace = Workspace(
+      Directory(path),
+    );
+    setupNotifier.value = SetupState.showIde;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final path = const String.fromEnvironment("CONTENT_DIRECTORY");
-    print('path: $path');
-    return IDE(
-      workspace: _workspace,
+    return ValueListenableBuilder<SetupState>(
+      valueListenable: setupNotifier,
+      builder: (context, setupState, child) {
+        switch (setupState) {
+          case SetupState.start:
+            return const Placeholder();
+          case SetupState.noValidDirectory:
+            return const Center(
+              child: Text("No valid directory selected"),
+            );
+          case SetupState.showIde:
+            return IDE(
+              workspace: _workspace,
+            );
+        }
+      },
     );
   }
 }

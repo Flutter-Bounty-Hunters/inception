@@ -36,6 +36,7 @@ dependencies:
   follow_the_leader: ^0.0.4+8
   path: ^1.9.0
   two_dimensional_scrollables: ^0.3.2
+  shared_preferences: ^2.3.2
 
 dev_dependencies:
   flutter_test:
