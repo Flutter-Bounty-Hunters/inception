@@ -10,6 +10,7 @@ import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class IDE extends StatefulWidget {
@@ -25,8 +26,11 @@ class IDE extends StatefulWidget {
 }
 
 class _IDEState extends State<IDE> {
+  // ignore: prefer_final_fields
   bool _showLeftPane = true;
+  // ignore: prefer_final_fields
   bool _showRightPane = false;
+  bool _isAnalyzing = false;
 
   @override
   void initState() {
@@ -34,8 +38,19 @@ class _IDEState extends State<IDE> {
     _initLspClient();
   }
 
+  @override
+  void dispose() {
+    widget.workspace.lspClient
+        .removeNotificationListener(_lspNotificationListener);
+
+    super.dispose();
+  }
+
   Future<void> _initLspClient() async {
     await widget.workspace.lspClient.start();
+
+    widget.workspace.lspClient
+        .addNotificationListener(_lspNotificationListener);
 
     await widget.workspace.lspClient.initialize(
       InitializeParams(
@@ -55,6 +70,20 @@ class _IDEState extends State<IDE> {
 
   Future<void> _stopLspClient() async {
     widget.workspace.lspClient.stop();
+  }
+
+  void _lspNotificationListener(LspNotification notification) {
+    final method = notification.method;
+
+    print("Received notification: $method");
+
+    if (method != r"$/analyzerStatus") {
+      return;
+    }
+
+    setState(() {
+      _isAnalyzing = notification.params["isAnalyzing"] as bool;
+    });
   }
 
   @override
@@ -92,6 +121,7 @@ class _IDEState extends State<IDE> {
                   lspClient: widget.workspace.lspClient,
                   onLspRestartPressed: _restartLspClient,
                   onLspStopPressed: _stopLspClient,
+                  isAnalyzing: _isAnalyzing,
                 ),
               ],
             ),
@@ -205,11 +235,13 @@ class BottomBar extends StatelessWidget {
     required this.lspClient,
     required this.onLspRestartPressed,
     required this.onLspStopPressed,
+    required this.isAnalyzing,
   });
 
   final LspClient lspClient;
   final VoidCallback onLspRestartPressed;
   final VoidCallback onLspStopPressed;
+  final bool isAnalyzing;
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +263,7 @@ class BottomBar extends StatelessWidget {
             const Expanded(
               child: Text("android_studio > lib > main.dart"),
             ),
-            _buildLspControls(),
+            _buildLspControls(isAnalyzing),
             const Expanded(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -256,7 +288,7 @@ class BottomBar extends StatelessWidget {
     );
   }
 
-  Widget _buildLspControls() {
+  Widget _buildLspControls(bool isAnalyzing) {
     return ListenableBuilder(
       listenable: lspClient,
       builder: (context, child) {
@@ -283,6 +315,17 @@ class BottomBar extends StatelessWidget {
                 color: Colors.red,
               ),
             ),
+            const SizedBox(width: 10),
+            Text(isAnalyzing ? "Analyzing..." : "LSP Analyzed"),
+            const SizedBox(width: 8),
+            if (isAnalyzing)
+              const AspectRatio(
+                aspectRatio: 1.0,
+                child: CupertinoActivityIndicator(
+                  color: Colors.white,
+                  radius: 8,
+                ),
+              )
           ],
         );
       },
@@ -323,8 +366,10 @@ class ContentArea extends StatefulWidget {
 }
 
 class _ContentAreaState extends State<ContentArea> {
+  // ignore: prefer_final_fields
   double _desiredLeftPaneWidth = 350;
 
+  // ignore: prefer_final_fields
   double _desiredRightPaneWidth = 250;
 
   final _fileContent = ValueNotifier<String>("");
