@@ -263,7 +263,7 @@ class BottomBar extends StatelessWidget {
             const Expanded(
               child: Text("android_studio > lib > main.dart"),
             ),
-            _buildLspControls(isAnalyzing),
+            _buildLspControls(),
             const Expanded(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -288,7 +288,7 @@ class BottomBar extends StatelessWidget {
     );
   }
 
-  Widget _buildLspControls(bool isAnalyzing) {
+  Widget _buildLspControls() {
     return ListenableBuilder(
       listenable: lspClient,
       builder: (context, child) {
