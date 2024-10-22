@@ -40,8 +40,7 @@ class _IDEState extends State<IDE> {
 
   @override
   void dispose() {
-    widget.workspace.lspClient
-        .removeNotificationListener(_lspNotificationListener);
+    widget.workspace.lspClient.removeNotificationListener(_lspNotificationListener);
 
     super.dispose();
   }
@@ -49,8 +48,7 @@ class _IDEState extends State<IDE> {
   Future<void> _initLspClient() async {
     await widget.workspace.lspClient.start();
 
-    widget.workspace.lspClient
-        .addNotificationListener(_lspNotificationListener);
+    widget.workspace.lspClient.addNotificationListener(_lspNotificationListener);
 
     await widget.workspace.lspClient.initialize(
       InitializeParams(

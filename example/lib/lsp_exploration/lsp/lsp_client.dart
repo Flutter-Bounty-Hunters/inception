@@ -95,9 +95,7 @@ class LspClient with ChangeNotifier {
 
     return Hover(
       contents: data.value['contents'],
-      range: data.value['range'] == null
-          ? null
-          : Range.fromJson(data.value['range']),
+      range: data.value['range'] == null ? null : Range.fromJson(data.value['range']),
     );
   }
 
@@ -181,9 +179,7 @@ class LspClient with ChangeNotifier {
       throw Exception('Unexpected response type: ${data.runtimeType}');
     }
 
-    return data.value
-        .map((itemJson) => TypeHierarchyItem.fromJson(itemJson))
-        .toList();
+    return data.value.map((itemJson) => TypeHierarchyItem.fromJson(itemJson)).toList();
   }
 }
 
