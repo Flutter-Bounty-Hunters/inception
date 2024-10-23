@@ -64,6 +64,14 @@ class LspClient with ChangeNotifier {
     notifyListeners();
   }
 
+  void addNotificationListener(LspNotificationListener listener) {
+    _lspClientCommunication?.addNotificationListener(listener);
+  }
+
+  void removeNotificationListener(LspNotificationListener listener) {
+    _lspClientCommunication?.removeNotificationListener(listener);
+  }
+
   Future<void> didOpenTextDocument(DidOpenTextDocumentParams params) async {
     await _lspClientCommunication!.sendNotification(
       'textDocument/didOpen',
@@ -113,7 +121,9 @@ class LspClient with ChangeNotifier {
     return data.value.map((json) => Location.fromJson(json)).toList();
   }
 
-  Future<List<DocumentSymbol>?> documentSymbols(DocumentSymbolsParams params) async {
+  Future<List<DocumentSymbol>?> documentSymbols(
+    DocumentSymbolsParams params,
+  ) async {
     final data = await _lspClientCommunication!.sendRequest(
       'textDocument/documentSymbol',
       params.toJson(),
@@ -153,7 +163,9 @@ class LspClient with ChangeNotifier {
   }
 
   // TODO: Replace TextDocumentPositionParams with a TypeHierarchyPrepareParams
-  Future<List<TypeHierarchyItem>?> prepareTypeHierarchy(PrepareTypeHierarchyParams params) async {
+  Future<List<TypeHierarchyItem>?> prepareTypeHierarchy(
+    PrepareTypeHierarchyParams params,
+  ) async {
     final data = await _lspClientCommunication!.sendRequest(
       'textDocument/prepareTypeHierarchy',
       params.toJson(),
@@ -181,6 +193,16 @@ class LspJsonRpcClient {
 
   int? _contentLength;
   String? _contentType;
+
+  final Set<LspNotificationListener> _listeners = {};
+
+  void addNotificationListener(LspNotificationListener listener) {
+    _listeners.add(listener);
+  }
+
+  void removeNotificationListener(LspNotificationListener listener) {
+    _listeners.remove(listener);
+  }
 
   Future<void> start() async {
     _buffer = '';
@@ -213,7 +235,10 @@ class LspJsonRpcClient {
     return completer.future;
   }
 
-  Future<void> sendNotification(String method, [Map<String, dynamic>? params]) async {
+  Future<void> sendNotification(
+    String method, [
+    Map<String, dynamic>? params,
+  ]) async {
     if (_lspProcess == null) {
       throw Exception('LSP process not started. Did you forget to call start?');
     }
@@ -227,7 +252,11 @@ class LspJsonRpcClient {
     _lspProcess?.kill();
   }
 
-  Future<void> _send(int messageId, String method, Map<String, dynamic> params) async {
+  Future<void> _send(
+    int messageId,
+    String method,
+    Map<String, dynamic> params,
+  ) async {
     final request = {
       'jsonrpc': '2.0',
       'id': messageId,
@@ -330,8 +359,19 @@ class LspJsonRpcClient {
 
     // TODO: should we handle malformed responses?
     final commandId = map['id'] as int?;
+
     if (commandId == null) {
       // We received a notification.
+      // Analyzer status method name:  {jsonrpc: 2.0, method: $/analyzerStatus, params: {isAnalyzing: false}}
+
+      print("LSP Notification: $map");
+
+      final notification = LspNotification.fromJson(map);
+
+      for (var listener in _listeners) {
+        listener(notification);
+      }
+
       return true;
     }
 
@@ -347,7 +387,9 @@ class LspJsonRpcClient {
     if (error != null) {
       completer.completeError(LspResponseError.fromJson(error));
     } else {
-      completer.complete(jsonTypeToLspType(map["result"]));
+      final result = jsonTypeToLspType(map["result"]);
+
+      completer.complete(result);
     }
 
     return true;
@@ -415,6 +457,25 @@ class LspResponseError {
     );
   }
 }
+
+class LspNotification {
+  static LspNotification fromJson(Map<String, dynamic> json) {
+    return LspNotification(
+      method: json["method"],
+      params: json["params"],
+    );
+  }
+
+  const LspNotification({
+    required this.method,
+    required this.params,
+  });
+
+  final String method;
+  final Map<String, dynamic> params;
+}
+
+typedef LspNotificationListener = void Function(LspNotification notification);
 
 sealed class LspAny {}
 
