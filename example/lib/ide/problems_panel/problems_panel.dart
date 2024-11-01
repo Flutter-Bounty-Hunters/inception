@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:example/ide/problems_pane/diagnostics.dart';
+import 'package:example/ide/problems_panel/diagnostics.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:flutter/material.dart';
 

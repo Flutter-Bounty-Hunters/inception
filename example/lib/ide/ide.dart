@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:example/ide/editor/editor.dart';
 import 'package:example/ide/file_explorer/file_explorer.dart';
 import 'package:example/ide/infrastructure/controls/toolbar_buttons.dart';
-import 'package:example/ide/problems_pane/problems_panel.dart';
+import 'package:example/ide/problems_panel/problems_panel.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
