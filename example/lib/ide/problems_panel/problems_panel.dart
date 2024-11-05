@@ -19,8 +19,8 @@ class ProblemsPanel extends StatefulWidget {
 }
 
 class _ProblemsPanelState extends State<ProblemsPanel> {
-  List<Diagnostic>? diagnostics;
-  String? uri;
+  List<Diagnostic>? _diagnostics;
+  String? _uri;
 
   @override
   void initState() {
@@ -28,36 +28,43 @@ class _ProblemsPanelState extends State<ProblemsPanel> {
     widget.lspClient.addNotificationListener(_onLspNotification);
   }
 
+  @override
+  void dispose() {
+    widget.lspClient.removeNotificationListener(_onLspNotification);
+    super.dispose();
+  }
+
   void _onLspNotification(LspNotification notification) {
     if (notification.method != 'textDocument/publishDiagnostics') {
       return;
     }
-    uri = notification.params['uri'] as String?;
-    final diagnosticsList = notification.params['diagnostics'] as List;
-    diagnostics = diagnosticsList.map((d) => Diagnostic.fromJson(d)).toList();
-    setState(() {});
+    setState(() {
+      _uri = notification.params['uri'] as String?;
+      final diagnosticsList = notification.params['diagnostics'] as List;
+      _diagnostics = diagnosticsList.map((d) => Diagnostic.fromJson(d)).toList();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (diagnostics == null) {
+    if (_diagnostics == null) {
       return const SizedBox();
     }
 
     // The LspClient will send problem notifications for all types of files.
     // We only want to display them for the currently selected file.
-    if (uri == null || widget.sourceFile == null) {
+    if (_uri == null || widget.sourceFile == null) {
       return const SizedBox();
     }
-    final sameFile = uri!.endsWith(widget.sourceFile!.path);
+    final sameFile = _uri!.endsWith(widget.sourceFile!.path);
     if (!sameFile) {
       return const SizedBox();
     }
 
     return ListView.builder(
-      itemCount: diagnostics!.length,
+      itemCount: _diagnostics!.length,
       itemBuilder: (context, index) {
-        final diagnostic = diagnostics![index];
+        final diagnostic = _diagnostics![index];
         return ListTile(
           title: Text(
             diagnostic.message,
