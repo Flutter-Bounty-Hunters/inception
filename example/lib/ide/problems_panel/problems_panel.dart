@@ -29,6 +29,15 @@ class _ProblemsPanelState extends State<ProblemsPanel> {
   }
 
   @override
+  void didUpdateWidget(ProblemsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.lspClient != oldWidget.lspClient) {
+      oldWidget.lspClient.removeNotificationListener(_onLspNotification);
+      widget.lspClient.addNotificationListener(_onLspNotification);
+    }
+  }
+
+  @override
   void dispose() {
     widget.lspClient.removeNotificationListener(_onLspNotification);
     super.dispose();
