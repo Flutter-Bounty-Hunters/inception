@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:example/ide/editor/editor.dart';
 import 'package:example/ide/file_explorer/file_explorer.dart';
 import 'package:example/ide/infrastructure/controls/toolbar_buttons.dart';
-import 'package:example/ide/lsp/lsp_panel.dart';
+import 'package:example/ide/problems_panel/problems_panel.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
@@ -28,8 +28,6 @@ class IDE extends StatefulWidget {
 class _IDEState extends State<IDE> {
   // ignore: prefer_final_fields
   bool _showLeftPane = true;
-  // ignore: prefer_final_fields
-  bool _showRightPane = false;
   bool _isAnalyzing = false;
 
   @override
@@ -108,7 +106,7 @@ class _IDEState extends State<IDE> {
                         child: ContentArea(
                           workspace: widget.workspace,
                           showLeftPane: _showLeftPane,
-                          showRightPane: _showRightPane,
+                          showRightPane: true,
                         ),
                       ),
                       const RightBar(),
@@ -368,7 +366,7 @@ class _ContentAreaState extends State<ContentArea> {
   double _desiredLeftPaneWidth = 350;
 
   // ignore: prefer_final_fields
-  double _desiredRightPaneWidth = 250;
+  double _desiredBottomPaneHeight = 200;
 
   final _fileContent = ValueNotifier<String>("");
   final _currentFile = ValueNotifier<File?>(null);
@@ -424,32 +422,40 @@ class _ContentAreaState extends State<ContentArea> {
             ),
           ),
         Expanded(
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            color: panelLowColor,
-            child: ValueListenableBuilder(
-              valueListenable: _currentFile,
-              builder: (context, child, value) {
-                return IdeEditor(
-                  lspClient: widget.workspace.lspClient,
-                  sourceFile: _currentFile.value,
-                  onGoToDefinition: _onGoToDefinition,
-                );
-              },
-            ),
+          child: ValueListenableBuilder(
+            valueListenable: _currentFile,
+            builder: (context, child, value) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      color: panelLowColor,
+                      child: IdeEditor(
+                        lspClient: widget.workspace.lspClient,
+                        sourceFile: _currentFile.value,
+                        onGoToDefinition: _onGoToDefinition,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    height: _desiredBottomPaneHeight,
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: dividerColor),
+                      ),
+                    ),
+                    child: ProblemsPanel(
+                      lspClient: widget.workspace.lspClient,
+                      sourceFile: _currentFile.value,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
-        if (widget.showRightPane)
-          Container(
-            width: _desiredRightPaneWidth,
-            decoration: const BoxDecoration(
-              border: Border(
-                right: BorderSide(color: dividerColor),
-              ),
-            ),
-            child: const SizedBox(),
-          ),
       ],
     );
   }
