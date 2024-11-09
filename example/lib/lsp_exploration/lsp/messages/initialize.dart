@@ -97,7 +97,16 @@ class WorkspaceFolder {
 }
 
 class LspClientCapabilities {
-  Map<String, dynamic> toJson() => {};
+  Map<String, dynamic> toJson() => {
+        'workspace': {
+          'workspaceEdit': {
+            'resourceOperations': ['create', 'rename', 'delete']
+          },
+          'fileOperations': {
+            'willRename': true,
+          }
+        }
+      };
 }
 
 class InitializeResult {

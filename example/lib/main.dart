@@ -42,6 +42,7 @@ class _ScreenState extends State<_Screen> {
     final settings = UserSettings();
     await settings.init();
     var path = settings.contentDirectory;
+    print('PATH: $path');
     path ??= await FilePicker.platform.getDirectoryPath();
     if (path == null) {
       setupNotifier.value = SetupState.noValidDirectory;

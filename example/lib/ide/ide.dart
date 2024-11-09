@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:example/ide/editor/editor.dart';
 import 'package:example/ide/file_explorer/file_explorer.dart';
 import 'package:example/ide/infrastructure/controls/toolbar_buttons.dart';
+import 'package:example/ide/infrastructure/user_settings.dart';
 import 'package:example/ide/problems_panel/problems_panel.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
@@ -10,6 +11,7 @@ import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
+import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -239,6 +241,22 @@ class BottomBar extends StatelessWidget {
   final VoidCallback onLspStopPressed;
   final bool isAnalyzing;
 
+  Future<void> _renameFile() async {
+    print("Rename file");
+    final root = UserSettings().contentDirectory;
+    print('root: $root');
+    final params = RenameFilesParams(
+      files: [
+        FileRename(
+          oldUri: "file://$root/example/lib/ide/ide.dart",
+          newUri: "file://$root/example/lib/ide/idea.dart",
+        ),
+      ],
+    );
+    final data = await lspClient.willRenameFiles(params);
+    print("Rename file data: $data");
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTextStyle(
@@ -293,6 +311,16 @@ class BottomBar extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text("LSP: $_lspClientStatus"),
+            const SizedBox(width: 8),
+            // This is here to experiment with the LspClient
+            GestureDetector(
+              onTap: _renameFile,
+              child: const Icon(
+                Icons.science_outlined,
+                size: 14,
+                color: Colors.lightBlueAccent,
+              ),
+            ),
             const SizedBox(width: 10),
             GestureDetector(
               onTap: onLspRestartPressed,

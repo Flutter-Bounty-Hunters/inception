@@ -8,6 +8,7 @@ import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
 import 'package:example/lsp_exploration/lsp/messages/go_to_definition.dart';
 import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
+import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:example/lsp_exploration/lsp/messages/semantic_tokens.dart';
 import 'package:example/lsp_exploration/lsp/messages/type_hierarchy.dart';
 import 'package:flutter/foundation.dart';
@@ -180,6 +181,27 @@ class LspClient with ChangeNotifier {
     }
 
     return data.value.map((itemJson) => TypeHierarchyItem.fromJson(itemJson)).toList();
+  }
+
+  Future<Map<String, dynamic>?> willRenameFiles(RenameFilesParams params) async {
+    final requestData = params.toJson();
+
+    final data = await _lspClientCommunication!.sendRequest(
+      'workspace/willRenameFiles',
+      requestData,
+    );
+
+    print('workspace/willRenameFiles: $data');
+
+    if (data is LspNull) {
+      return null;
+    }
+
+    if (data is! LspObject) {
+      throw Exception('Unexpected response type: ${data.runtimeType}');
+    }
+
+    return data.value;
   }
 }
 
