@@ -219,7 +219,10 @@ class _IdeEditorState extends State<IdeEditor> {
       return;
     }
 
-    final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(event.localPosition);
+    print("_onHover()");
+    final globalOffset = event.position;
+    print(" - local offset: ${event.localPosition}");
+    print(" - global offset: $globalOffset");
     final codeLines = _linesKey.asCodeLines;
     final hoverPosition = codeLines.findCodePositionNearestGlobalOffset(globalOffset);
 
