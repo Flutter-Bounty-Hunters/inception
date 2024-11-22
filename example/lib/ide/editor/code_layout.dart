@@ -43,13 +43,13 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
 
   @override
   CodeRange? findWordBoundaryAtLocalOffset(Offset localOffset) {
-    final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(Offset.zero);
+    final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(localOffset);
     return findWordBoundaryAtGlobalOffset(globalOffset);
   }
 
   @override
   CodePosition findCodePositionNearestGlobalOffset(Offset globalOffset) {
-    for (int lineIndex in _lineKeys.keys) {
+    for (int lineIndex = 0; lineIndex < widget.codeLines.length; lineIndex += 1) {
       final lineLayout = _lineKeys[lineIndex]!.asCodeLine;
       if (!lineLayout.containsGlobalYValue(globalOffset.dy)) {
         continue;
@@ -94,7 +94,7 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   }
 
   CodeLineLayout? _findLineLayoutAtGlobalOffset(Offset globalOffset) {
-    for (int lineIndex in _lineKeys.keys) {
+    for (int lineIndex = 0; lineIndex < widget.codeLines.length; lineIndex += 1) {
       final lineLayout = _lineKeys[lineIndex]!.asCodeLine;
       if (!lineLayout.containsGlobalYValue(globalOffset.dy)) {
         continue;
@@ -205,6 +205,14 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
     final myBox = context.findRenderObject() as RenderBox;
     final myOffset = myBox.localToGlobal(Offset.zero);
     final myRect = myOffset & myBox.size;
+
+    if (widget.lineNumber == 100) {
+      print("I'm line 100 and my global origin is: ${myBox.localToGlobal(Offset.zero)}");
+    }
+    if (myRect.top <= y && y <= myRect.bottom) {
+      print("I'm line ${widget.lineNumber} and I contain y: $y");
+    }
+
     return myRect.top <= y && y <= myRect.bottom;
   }
 
