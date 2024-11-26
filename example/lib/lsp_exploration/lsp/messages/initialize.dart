@@ -100,10 +100,13 @@ class LspClientCapabilities {
   Map<String, dynamic> toJson() => {
         'workspace': {
           'workspaceEdit': {
-            'resourceOperations': ['create', 'rename', 'delete']
+            'resourceOperations': ['create', 'rename', 'delete'],
+            'documentChanges': true,
           },
+          "applyEdit": true,
           'fileOperations': {
             'willRename': true,
+            'didRename': true,
           }
         }
       };

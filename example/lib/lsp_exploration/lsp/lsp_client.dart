@@ -203,6 +203,15 @@ class LspClient with ChangeNotifier {
 
     return data.value;
   }
+
+  Future<void> didRenameFiles(RenameFilesParams params) async {
+    final requestData = params.toJson();
+
+    await _lspClientCommunication!.sendNotification(
+      'workspace/didRenameFiles',
+      requestData,
+    );
+  }
 }
 
 class LspJsonRpcClient {
