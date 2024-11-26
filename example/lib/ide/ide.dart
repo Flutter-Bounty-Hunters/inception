@@ -15,6 +15,8 @@ import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import 'package:path/path.dart' as path;
+
 class IDE extends StatefulWidget {
   const IDE({
     super.key,
@@ -31,6 +33,8 @@ class _IDEState extends State<IDE> {
   // ignore: prefer_final_fields
   bool _showLeftPane = true;
   bool _isAnalyzing = false;
+
+  String? currentFile;
 
   @override
   void initState() {
@@ -110,6 +114,11 @@ class _IDEState extends State<IDE> {
                           workspace: widget.workspace,
                           showLeftPane: _showLeftPane,
                           showRightPane: true,
+                          onFileOpen: (value) {
+                            setState(() {
+                              currentFile = value;
+                            });
+                          },
                         ),
                       ),
                       const RightBar(),
@@ -121,6 +130,7 @@ class _IDEState extends State<IDE> {
                   onLspRestartPressed: _restartLspClient,
                   onLspStopPressed: _stopLspClient,
                   isAnalyzing: _isAnalyzing,
+                  currentFilePath: currentFile,
                 ),
               ],
             ),
@@ -235,27 +245,45 @@ class BottomBar extends StatelessWidget {
     required this.onLspRestartPressed,
     required this.onLspStopPressed,
     required this.isAnalyzing,
+    this.currentFilePath,
   });
 
   final LspClient lspClient;
   final VoidCallback onLspRestartPressed;
   final VoidCallback onLspStopPressed;
   final bool isAnalyzing;
+  final String? currentFilePath;
 
-  Future<void> _renameFile() async {
+  Future<void> _renameFile(BuildContext context) async {
+    if (currentFilePath == null) {
+      throw Exception("No file is currently open");
+    }
+
     print("Rename file");
+    final newFileName = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          return const RenameFileDialog();
+        });
     final root = UserSettings().contentDirectory;
     print('root: $root');
+
+    final newFilePath = path.join(path.dirname(currentFilePath!), "$newFileName${path.extension(currentFilePath!)}");
+    print("New file path: $newFilePath");
+
     final params = RenameFilesParams(
       files: [
         FileRename(
-          oldUri: "file://$root/example/lib/ide/ide.dart",
-          newUri: "file://$root/example/lib/ide/idea.dart",
+          oldUri: "file://${currentFilePath!}",
+          newUri: "file://$newFilePath",
+          // TODO: Create a object to serialize the file path as understood by the LSP. Eg. file://$root/example/lib/ide/idea.dart
         ),
       ],
     );
     final data = await lspClient.willRenameFiles(params);
     print("Rename file data: $data");
+
+    await lspClient.didRenameFiles(params);
   }
 
   @override
@@ -315,7 +343,9 @@ class BottomBar extends StatelessWidget {
             const SizedBox(width: 8),
             // This is here to experiment with the LspClient
             GestureDetector(
-              onTap: _renameFile,
+              onTap: () {
+                _renameFile(context);
+              },
               child: const Icon(
                 Icons.science_outlined,
                 size: 14,
@@ -373,18 +403,65 @@ class BottomBar extends StatelessWidget {
   }
 }
 
+class RenameFileDialog extends StatefulWidget {
+  const RenameFileDialog({
+    super.key,
+  });
+
+  @override
+  State<RenameFileDialog> createState() => _RenameFileDialogState();
+}
+
+class _RenameFileDialogState extends State<RenameFileDialog> {
+  final TextEditingController textEditingController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return SimpleDialog(
+      title: const Text("Rename file"),
+      children: [
+        TextField(
+          controller: textEditingController,
+          decoration: const InputDecoration(
+            labelText: "New file name",
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(textEditingController.text);
+              },
+              child: const Text("Rename"),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class ContentArea extends StatefulWidget {
   const ContentArea({
     super.key,
     required this.workspace,
     required this.showLeftPane,
     required this.showRightPane,
+    required this.onFileOpen,
   });
 
   final Workspace workspace;
 
   final bool showLeftPane;
   final bool showRightPane;
+  final Function(String documentUrl) onFileOpen;
 
   @override
   State<ContentArea> createState() => _ContentAreaState();
@@ -426,7 +503,7 @@ class _ContentAreaState extends State<ContentArea> {
             ),
             child: FileExplorer(
               directory: widget.workspace.directory,
-              onFileOpenRequested: (file) {
+              onFileOpenRequested: (file) async {
                 _fileContent.value = file.readAsStringSync();
                 _currentFile.value = file;
 
@@ -437,7 +514,7 @@ class _ContentAreaState extends State<ContentArea> {
                   languageId = "yaml";
                 }
 
-                widget.workspace.lspClient.didOpenTextDocument(
+                await widget.workspace.lspClient.didOpenTextDocument(
                   DidOpenTextDocumentParams(
                     textDocument: TextDocumentItem(
                       uri: "file://${file.absolute.path}",
@@ -447,6 +524,8 @@ class _ContentAreaState extends State<ContentArea> {
                     ),
                   ),
                 );
+
+                widget.onFileOpen(_currentFile.value!.path);
               },
             ),
           ),
