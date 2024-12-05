@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
@@ -12,12 +13,24 @@ import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:example/lsp_exploration/lsp/messages/semantic_tokens.dart';
 import 'package:example/lsp_exploration/lsp/messages/type_hierarchy.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 
 class LspClient with ChangeNotifier {
   LspJsonRpcClient? _lspClientCommunication;
 
   LspClientStatus get status => _status;
   LspClientStatus _status = LspClientStatus.notRunning;
+
+  /// The URI of the root project opened with the LSP client.
+  ///
+  /// Available only after the client is initialized.
+  String get rootUri => _rootUri!;
+  String? _rootUri;
+
+  /// The path of the root project opened with the LSP client.
+  ///
+  /// Available only after the client is initialized.
+  String get rootPath => path.fromUri(_rootUri!);
 
   Future<void> start() async {
     _status = LspClientStatus.starting;
@@ -47,6 +60,7 @@ class LspClient with ChangeNotifier {
     }
 
     _status = LspClientStatus.initialized;
+    _rootUri = request.rootUri;
     notifyListeners();
 
     return InitializeResult.fromJson(data.value);
