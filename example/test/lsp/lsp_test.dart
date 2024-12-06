@@ -7,14 +7,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_tools.dart';
 
 void main() {
-  testLsp('produces hover information', (tester) async {
+  testLsp('produces hover information', (lspTester) async {
     const filePath = 'lib/ide/editor/editor.dart';
 
-    await tester.openFile(filePath);
+    await lspTester.openFile(filePath);
 
-    final hover = await tester.client.hover(
+    final hover = await lspTester.client.hover(
       HoverParams(
-        textDocument: TextDocumentIdentifier(uri: tester.filePathToUri(filePath)),
+        textDocument: TextDocumentIdentifier(uri: lspTester.filePathToUri(filePath)),
         position: const Position(line: 8, character: 16),
       ),
     );

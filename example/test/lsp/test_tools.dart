@@ -108,4 +108,4 @@ class LspTester {
   }
 }
 
-typedef LspTestCallback = Future<void> Function(LspTester tester);
+typedef LspTestCallback = Future<void> Function(LspTester lspTester);
