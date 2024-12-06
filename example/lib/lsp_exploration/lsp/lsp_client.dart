@@ -309,8 +309,6 @@ class LspJsonRpcClient {
   void _onData(List<int> event) {
     _buffer += String.fromCharCodes(event);
 
-    print("_onData - buffer:\n${_buffer.toString()}");
-
     while (_tryParse()) {
       // Keep trying to parse until we either finish parsing the message
       // or we reach the end of the data buffer.
@@ -399,8 +397,6 @@ class LspJsonRpcClient {
     if (commandId == null) {
       // We received a notification.
       // Analyzer status method name:  {jsonrpc: 2.0, method: $/analyzerStatus, params: {isAnalyzing: false}}
-
-      print("LSP Notification: $map");
 
       final notification = LspNotification.fromJson(map);
 
