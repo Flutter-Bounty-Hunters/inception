@@ -25,7 +25,7 @@ void testLsp(
 }) async {
   test(description, () async {
     final client = await initLsp(
-      workspacePath: workspacePath ?? path.context.current,
+      workspacePath: workspacePath ?? path.join(path.context.current, 'test', 'lsp', 'test_project'),
     );
     try {
       final tester = LspTester(client: client);
@@ -81,15 +81,15 @@ class LspTester {
   ///
   /// The [filePath] can be relative to the project root or an absolute path.
   Future<void> openFile(String filePath) async {
-    final file = filePathToUri(filePath);
+    final fileUri = filePathToUri(filePath);
 
     await client.didOpenTextDocument(
       DidOpenTextDocumentParams(
         textDocument: TextDocumentItem(
-          uri: file,
+          uri: fileUri,
           languageId: 'dart',
           version: 1,
-          text: File(filePath).readAsStringSync(),
+          text: File(Uri.parse(fileUri).path).readAsStringSync(),
         ),
       ),
     );

@@ -8,14 +8,14 @@ import 'test_tools.dart';
 
 void main() {
   testLsp('produces hover information', (lspTester) async {
-    const filePath = 'lib/ide/editor/editor.dart';
+    const filePath = 'lib/counter.dart';
 
     await lspTester.openFile(filePath);
 
     final hover = await lspTester.client.hover(
       HoverParams(
         textDocument: TextDocumentIdentifier(uri: lspTester.filePathToUri(filePath)),
-        position: const Position(line: 8, character: 16),
+        position: const Position(line: 3, character: 9),
       ),
     );
 
