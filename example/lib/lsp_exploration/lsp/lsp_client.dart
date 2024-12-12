@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
@@ -15,6 +16,12 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 
 class LspClient with ChangeNotifier {
+  LspClient({
+    this.debug = false,
+  });
+
+  final bool debug;
+
   LspJsonRpcClient? _lspClientCommunication;
 
   LspClientStatus get status => _status;
@@ -45,6 +52,8 @@ class LspClient with ChangeNotifier {
 
   Future<InitializeResult> initialize(InitializeParams request) async {
     _status = LspClientStatus.initializing;
+    _rootUri = request.rootUri;
+
     notifyListeners();
 
     final data = await _lspClientCommunication!.sendRequest(
@@ -59,7 +68,7 @@ class LspClient with ChangeNotifier {
     }
 
     _status = LspClientStatus.initialized;
-    _rootUri = request.rootUri;
+
     notifyListeners();
 
     return InitializeResult.fromJson(data.value);
@@ -204,8 +213,6 @@ class LspClient with ChangeNotifier {
       requestData,
     );
 
-    print('workspace/willRenameFiles: $data');
-
     if (data is LspNull) {
       return null;
     }
@@ -216,9 +223,34 @@ class LspClient with ChangeNotifier {
 
     return data.value;
   }
+
+  Future<List<LspCodeAction>?> codeAction(CodeActionsParams params) async {
+    final requestData = params.toJson();
+
+    final data = await _lspClientCommunication!.sendRequest(
+      'textDocument/codeAction',
+      requestData,
+    );
+
+    if (data is LspNull) {
+      return null;
+    }
+
+    if (data is! LspArray) {
+      throw Exception('Unexpected response type: ${data.runtimeType}');
+    }
+
+    return data.value.map((e) => LspCodeAction.fromJson(e)).toList();
+  }
 }
 
 class LspJsonRpcClient {
+  LspJsonRpcClient({
+    this.debug = false,
+  });
+
+  final bool debug;
+
   Process? _lspProcess;
   int _currentCommandId = 0;
 
@@ -300,8 +332,13 @@ class LspJsonRpcClient {
     };
 
     final payload = jsonEncode(request);
-    final message = 'Content-Length: ${payload.length}\r\n\r\n$payload\r\n';
 
+    if (debug) {
+      print('[LSP] SENDING >>>>>>');
+      print(payload);
+    }
+
+    final message = 'Content-Length: ${payload.length}\r\n\r\n$payload\r\n';
     _lspProcess!.stdin.write(message);
   }
 
@@ -389,6 +426,11 @@ class LspJsonRpcClient {
     _contentType = null;
 
     final map = jsonDecode(content);
+
+    if (debug) {
+      print('[LSP] RECEIVING <<<<<<');
+      print(content);
+    }
 
     // TODO: should we handle malformed responses?
     final commandId = map['id'] as int?;

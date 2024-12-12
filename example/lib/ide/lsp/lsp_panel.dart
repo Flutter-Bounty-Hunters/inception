@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:example/ide/workspace.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
@@ -88,6 +90,7 @@ class _LspPanelState extends State<LspPanel> {
         onPressed = () async {
           await widget.workspace.lspClient.initialize(
             InitializeParams(
+              processId: pid,
               rootUri: 'file://${widget.workspace.directory.absolute.path}',
               capabilities: LspClientCapabilities(
                   // experimental: {

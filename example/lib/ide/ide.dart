@@ -52,6 +52,7 @@ class _IDEState extends State<IDE> {
 
     await widget.workspace.lspClient.initialize(
       InitializeParams(
+        processId: pid,
         rootUri: 'file://${widget.workspace.directory.absolute.path}',
         capabilities: LspClientCapabilities(),
       ),
@@ -439,7 +440,7 @@ class _ContentAreaState extends State<ContentArea> {
                 widget.workspace.lspClient.didOpenTextDocument(
                   DidOpenTextDocumentParams(
                     textDocument: TextDocumentItem(
-                      uri: "file://${file.path}",
+                      uri: "file://${file.absolute.path}",
                       languageId: languageId,
                       version: 1,
                       text: file.readAsStringSync(),

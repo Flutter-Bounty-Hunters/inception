@@ -24,4 +24,14 @@ class Diagnostic {
       source: json['source'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'code': code,
+      'message': message,
+      'range': range.toJson(),
+      'severity': severity,
+      'source': source,
+    };
+  }
 }

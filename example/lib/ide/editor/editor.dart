@@ -1,18 +1,18 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:example/ide/editor/code_layout.dart';
 import 'package:example/ide/editor/syntax_highlighting.dart';
 import 'package:example/ide/infrastructure/keyboard_shortcuts.dart';
+import 'package:example/ide/infrastructure/popover_list.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
+import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/go_to_definition.dart';
 import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:follow_the_leader/follow_the_leader.dart';
 import 'package:path/path.dart' as path;
@@ -38,7 +38,7 @@ class IdeEditor extends StatefulWidget {
 
 class _IdeEditorState extends State<IdeEditor> {
   final _linesKey = GlobalKey();
-  final _textKey = GlobalKey();
+  late FollowerBoundary _screenBoundary;
 
   Timer? _hoverTimer;
 
@@ -54,7 +54,12 @@ class _IdeEditorState extends State<IdeEditor> {
   /// Link to display a popover near to the focal point.
   final _hoverLink = LeaderLink();
 
-  int? _latestHoveredTextOffset;
+  final _actionsOverlayController = OverlayPortalController();
+  final _actionsFocalPoint = ValueNotifier<Rect?>(null);
+  final _actionsLink = LeaderLink();
+  final _availableCodeActions = ValueNotifier<List<LspCodeAction>?>(null);
+
+  CodePosition? _latestHoveredCodePosition;
 
   Highlighter? _highlighter;
 
@@ -66,6 +71,8 @@ class _IdeEditorState extends State<IdeEditor> {
 
   var _styledLines = <TextSpan>[];
 
+  Position? _currentSelectedPosition;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +83,16 @@ class _IdeEditorState extends State<IdeEditor> {
     _initializeSyntaxHighlighting();
 
     _fileContent.addListener(_onFileContentChange);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    _screenBoundary = ScreenFollowerBoundary(
+      screenSize: MediaQuery.sizeOf(context),
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
   }
 
   @override
@@ -123,19 +140,24 @@ class _IdeEditorState extends State<IdeEditor> {
     });
   }
 
-  Future<void> _hoverAtTextOffset(int offset) async {
+  Future<void> _hoverAtCodePosition(CodePosition position) async {
+    if (widget.lspClient.status != LspClientStatus.initialized) {
+      return;
+    }
+
+    if (_actionsOverlayController.isShowing) {
+      // Don't show a hover if the actions overlay is showing.
+      return;
+    }
+
     final sourceFile = widget.sourceFile;
     if (sourceFile == null) {
       return;
     }
 
-    final text = _fileContent.value;
-
-    if (_shouldAbortCurrentHoverRequest(offset)) {
+    if (_shouldAbortCurrentHoverRequest(position)) {
       return;
     }
-
-    final (line, character) = _getLineAndCharacterForOffset(text, offset);
 
     final filePath = sourceFile.isAbsolute //
         ? sourceFile.path
@@ -147,8 +169,8 @@ class _IdeEditorState extends State<IdeEditor> {
           uri: "file://$filePath",
         ),
         position: Position(
-          line: line,
-          character: character,
+          line: position.line,
+          character: position.characterOffset,
         ),
       ),
     );
@@ -157,7 +179,7 @@ class _IdeEditorState extends State<IdeEditor> {
       return;
     }
 
-    if (_shouldAbortCurrentHoverRequest(offset)) {
+    if (_shouldAbortCurrentHoverRequest(position)) {
       return;
     }
 
@@ -181,32 +203,6 @@ class _IdeEditorState extends State<IdeEditor> {
     }
   }
 
-  (int line, int character) _getLineAndCharacterForOffset(String text, int offset) {
-    if (text.isEmpty) {
-      return (0, 0);
-    }
-
-    int lineNumber = 0;
-    int charNumberInLine = 0;
-
-    int currentOffset = 0;
-
-    final lines = text.split('\n');
-    for (int i = 0; i < lines.length; i++) {
-      final lineLength = lines[i].length;
-
-      if (currentOffset + lineLength >= offset) {
-        charNumberInLine = offset - currentOffset;
-        lineNumber = i;
-        break;
-      }
-
-      currentOffset += lineLength + 1;
-    }
-
-    return (lineNumber, charNumberInLine);
-  }
-
   void _onHover(PointerHoverEvent event) {
     if (widget.lspClient.status != LspClientStatus.initialized) {
       return;
@@ -223,39 +219,15 @@ class _IdeEditorState extends State<IdeEditor> {
       return;
     }
 
-    print("_onHover()");
     final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(event.localPosition);
-    print(" - local offset: ${event.localPosition}");
-    print(" - global offset: $globalOffset");
     final codeLines = _linesKey.asCodeLines;
     final hoverPosition = codeLines.findCodePositionNearestGlobalOffset(globalOffset);
-    print(" - hover position: $hoverPosition");
+
     final hoverWordRange = codeLines.findWordBoundaryAtGlobalOffset(globalOffset);
-    print(" - hover word range: $hoverWordRange");
-
-    final renderParagraph = _textKey.currentContext?.findRenderObject() as RenderParagraph?;
-    if (renderParagraph == null) {
-      _hoverOverlayController.hide();
+    if (hoverWordRange == null) {
       return;
     }
-
-    final localPosition = renderParagraph.globalToLocal(event.position);
-    final textPosition = renderParagraph.getPositionForOffset(localPosition);
-    if (textPosition.offset < 0) {
-      _hoverOverlayController.hide();
-      return;
-    }
-
-    final wordRange = renderParagraph.getWordBoundary(textPosition);
-    final boxes = renderParagraph.getBoxesForSelection(
-      TextSelection(
-        baseOffset: wordRange.start,
-        extentOffset: wordRange.end,
-      ),
-      boxHeightStyle: BoxHeightStyle.max,
-      boxWidthStyle: BoxWidthStyle.max,
-    );
-
+    final boxes = codeLines.getSelectionBoxesForCodeRange(hoverWordRange);
     if (boxes.isNotEmpty) {
       final newFocalPoint = boxes.first.toRect();
       if (newFocalPoint != _hoveredFocalPoint.value) {
@@ -267,16 +239,16 @@ class _IdeEditorState extends State<IdeEditor> {
       _hoveredFocalPoint.value = newFocalPoint;
     }
 
-    _latestHoveredTextOffset = textPosition.offset;
+    _latestHoveredCodePosition = hoverPosition;
 
     _hoverTimer?.cancel();
     _hoverTimer = Timer(
       const Duration(milliseconds: 500),
-      () => _hoverAtTextOffset(textPosition.offset),
+      () => _hoverAtCodePosition(hoverPosition),
     );
   }
 
-  bool _shouldAbortCurrentHoverRequest(int hoveredTextOffset) {
+  bool _shouldAbortCurrentHoverRequest(CodePosition hoveredCodePosition) {
     if (!mounted) {
       return true;
     }
@@ -286,7 +258,7 @@ class _IdeEditorState extends State<IdeEditor> {
       return true;
     }
 
-    if (hoveredTextOffset != _latestHoveredTextOffset) {
+    if (hoveredCodePosition != _latestHoveredCodePosition) {
       // The user hovered another position while the hover request was happening. Ignore the results,
       // because a new request will happen.
       return true;
@@ -305,43 +277,99 @@ class _IdeEditorState extends State<IdeEditor> {
   }
 
   Future<void> _onTapUp(TapUpDetails details) async {
+    if (_actionsOverlayController.isShowing) {
+      _actionsOverlayController.hide();
+    }
+
+    if (_hoverOverlayController.isShowing) {
+      _hoverOverlayController.hide();
+    }
+
     final sourceFile = widget.sourceFile;
     if (sourceFile == null) {
       return;
     }
-    final renderParagraph = _textKey.currentContext?.findRenderObject() as RenderParagraph?;
-    if (renderParagraph == null) {
+
+    final codeLines = _linesKey.asCodeLines;
+    final codePosition = codeLines.findCodePositionNearestGlobalOffset(details.globalPosition);
+
+    _currentSelectedPosition = Position(
+      line: codePosition.line,
+      character: codePosition.characterOffset,
+    );
+
+    final range = codeLines.findWordBoundaryAtGlobalOffset(details.globalPosition);
+    if (range == null) {
       return;
     }
 
-    final localPosition = renderParagraph.globalToLocal(details.globalPosition);
-    final textPosition = renderParagraph.getPositionForOffset(localPosition);
-    if (textPosition.offset < 0) {
+    final boxes = codeLines.getSelectionBoxesForCodeRange(range);
+    if (boxes.isEmpty) {
       return;
     }
 
-    //final wordRange = renderParagraph.getWordBoundary(textPosition);
-    final text = _fileContent.value;
-    final (line, character) = _getLineAndCharacterForOffset(text, textPosition.offset);
+    _actionsFocalPoint.value = boxes.first.toRect();
+
+    // TODO: re-enable this checking if CMD is pressed.
+    //
+    // final res = await widget.lspClient.goToDefinition(DefinitionsParams(
+    //   textDocument: TextDocumentIdentifier(
+    //     uri: "file://$filePath",
+    //   ),
+    //   position: Position(
+    //     line: codePosition.line,
+    //     character: codePosition.characterOffset,
+    //   ),
+    // ));
+    // if (res == null || res.isEmpty) {
+    //   return;
+    // }
+
+    // widget.onGoToDefinition?.call(res.first.uri, res.first.range);
+  }
+
+  Future<void> _codeActions(CodeActionsIntent intent) async {
+    if (_hoverOverlayController.isShowing) {
+      _hoverOverlayController.hide();
+    }
+
+    final sourceFile = widget.sourceFile;
+    if (sourceFile == null) {
+      return;
+    }
+
+    final position = _currentSelectedPosition;
+    if (position == null) {
+      return;
+    }
 
     final filePath = sourceFile.isAbsolute //
         ? sourceFile.path
         : path.absolute(sourceFile.path);
 
-    final res = await widget.lspClient.goToDefinition(DefinitionsParams(
-      textDocument: TextDocumentIdentifier(
-        uri: "file://$filePath",
+    final res = await widget.lspClient.codeAction(
+      CodeActionsParams(
+        textDocument: TextDocumentIdentifier(uri: 'file://$filePath'),
+        range: Range(start: position, end: position),
+        context: const CodeActionContext(
+          triggerKind: CodeActionTriggerKind.invoked,
+          // We don't want actions like "Organize Imports" or "Fix All"
+          // to be displayed at the middle of the code.
+          only: [
+            CodeActionKind.quickFix,
+            CodeActionKind.refactor,
+          ],
+        ),
       ),
-      position: Position(
-        line: line,
-        character: character,
-      ),
-    ));
+    );
+
+    _availableCodeActions.value = res;
+
     if (res == null || res.isEmpty) {
       return;
     }
 
-    widget.onGoToDefinition?.call(res.first.uri, res.first.range);
+    _actionsOverlayController.show();
   }
 
   @override
@@ -358,11 +386,13 @@ class _IdeEditorState extends State<IdeEditor> {
             _fontSize = max(_fontSize - _computeFontIncrement(), 8);
           }),
         ),
+        CodeActionsIntent: CallbackAction<CodeActionsIntent>(onInvoke: _codeActions),
       },
       child: Shortcuts(
         shortcuts: {
           LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.equal): const IncreaseFontSizeIntent(),
           LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus): const DecreaseFontSizeIntent(),
+          LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.period): const CodeActionsIntent(),
         },
         child: Focus(
           focusNode: _focusNode,
@@ -376,19 +406,24 @@ class _IdeEditorState extends State<IdeEditor> {
               child: OverlayPortal(
                 controller: _hoverOverlayController,
                 overlayChildBuilder: (context) => _buildHoverOverlay(),
-                child: Stack(
-                  children: [
-                    _buildCursorHoverLeader(),
-                    GestureDetector(
-                      onTapUp: _onTapUp,
-                      child: CodeLines(
-                        key: _linesKey,
-                        codeLines: _styledLines,
-                        indentLineColor: _lineColor,
-                        baseTextStyle: _baseCodeStyle,
+                child: OverlayPortal(
+                  controller: _actionsOverlayController,
+                  overlayChildBuilder: (context) => _buildCodeActionsPopover(),
+                  child: Stack(
+                    children: [
+                      _buildCursorHoverLeader(),
+                      _buildCodeActionsLeader(),
+                      GestureDetector(
+                        onTapUp: _onTapUp,
+                        child: CodeLines(
+                          key: _linesKey,
+                          codeLines: _styledLines,
+                          indentLineColor: _lineColor,
+                          baseTextStyle: _baseCodeStyle,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -443,12 +478,12 @@ class _IdeEditorState extends State<IdeEditor> {
             BoxShadow(
               offset: Offset.zero,
               blurRadius: 3,
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
             ),
             BoxShadow(
               offset: const Offset(0, 12),
               blurRadius: 16,
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
             ),
           ],
         ),
@@ -488,6 +523,76 @@ class _IdeEditorState extends State<IdeEditor> {
       ),
     );
   }
+
+  Widget _buildCodeActionsLeader() {
+    return ValueListenableBuilder(
+      valueListenable: _actionsFocalPoint,
+      builder: (context, value, child) {
+        if (value == null) {
+          return const SizedBox();
+        }
+
+        return Positioned(
+          top: _actionsFocalPoint.value!.top,
+          left: _actionsFocalPoint.value!.left,
+          child: Leader(
+            link: _actionsLink,
+            child: SizedBox(
+              width: _actionsFocalPoint.value!.width,
+              height: _actionsFocalPoint.value!.height,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCodeActionsPopover() {
+    final actions = _availableCodeActions.value;
+    if (actions == null || actions.isEmpty) {
+      return const SizedBox();
+    }
+
+    return FollowerFadeOutBeyondBoundary(
+      link: _actionsLink,
+      boundary: _screenBoundary,
+      child: Follower.withOffset(
+        link: _actionsLink,
+        leaderAnchor: Alignment.bottomLeft,
+        followerAnchor: Alignment.topLeft,
+        offset: const Offset(0, -20),
+        boundary: _screenBoundary,
+        child: PopoverList(
+          editorFocusNode: _focusNode,
+          onListItemSelected: (_) => _actionsOverlayController.hide(),
+          onCancelRequested: () => _actionsOverlayController.hide(),
+          listItems: actions
+              .map(
+                (action) => PopoverListItem(
+                  id: action.command,
+                  label: action.title,
+                  icon: _buildIconForCodeAction(action),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+
+  Icon _buildIconForCodeAction(LspCodeAction action) {
+    return switch (action.kind) {
+      CodeActionKind.refactorExtract => const Icon(
+          Icons.build_outlined,
+          size: 14,
+        ),
+      _ => const Icon(
+          Icons.lightbulb,
+          color: Colors.yellow,
+          size: 14,
+        )
+    };
+  }
 }
 
 const _baseCodeStyle = TextStyle(
@@ -498,4 +603,3 @@ const _baseCodeStyle = TextStyle(
 );
 
 const _lineColor = Color(0xFF333333);
-const _background = Color(0xFF222222);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
@@ -24,58 +25,68 @@ void testLsp(
   String? workspacePath,
 }) async {
   test(description, () async {
-    final client = await initLsp(
-      workspacePath: workspacePath ?? path.join(path.context.current, 'test', 'lsp', 'test_project'),
-    );
+    final tester = LspTester();
     try {
-      final tester = LspTester(client: client);
+      await tester.initialize(
+        workspacePath: workspacePath ?? path.join(path.context.current, 'test', 'lsp', 'test_project'),
+      );
 
       await body(tester);
     } finally {
-      client.stop();
+      tester.stop();
     }
   });
 }
 
-/// Initializes an LSP client with the given [workspacePath] as the
-/// project root.
-Future<LspClient> initLsp({
-  required String workspacePath,
-}) async {
-  final client = LspClient();
-
-  // Start the LSP process.
-  await client.start();
-
-  try {
-    await client.initialize(
-      InitializeParams(
-        rootUri: 'file://$workspacePath',
-        capabilities: LspClientCapabilities(),
-      ),
-    );
-
-    // Tell the LSP we are ready.
-    await client.initialized();
-  } catch (e) {
-    // Avoid letting a dangling LSP proccess running.
-    client.stop();
-
-    rethrow;
-  }
-
-  return client;
-}
-
 /// A class to make it easier to perform some operations with the LSP.
 ///
-/// For example, opening a file in the LSP.
+/// For example, initializing the LSP and waiting it to finish analysis or opening a file.
 class LspTester {
-  LspTester({
-    required this.client,
-  });
+  late LspClient client;
 
-  final LspClient client;
+  Completer<void> _pendingAnalysis = Completer<void>();
+
+  Future<void> initialize({
+    required String workspacePath,
+  }) async {
+    client = LspClient();
+
+    // Start the LSP process.
+    await client.start();
+
+    try {
+      // Listen for the $/analyzerStatus notification to know when the LSP has finished analysis.
+      // Some operations, like code actions, return an empty array if the LSP is still analyzing.
+      _pendingAnalysis = Completer<void>();
+      client.addNotificationListener(_onLspAnalyzerListener);
+
+      // Initialize the LSP.
+      await client.initialize(
+        InitializeParams(
+          processId: pid,
+          rootUri: 'file://$workspacePath',
+          capabilities: LspClientCapabilities(),
+        ),
+      );
+
+      // Tell the LSP we are ready.
+      await client.initialized();
+
+      // Wait until we receive a notification that the LSP has finished analysis.
+      await _pendingAnalysis.future;
+    } catch (e) {
+      // Avoid letting a dangling LSP proccess running.
+      client.stop();
+
+      rethrow;
+    } finally {
+      client.removeNotificationListener(_onLspAnalyzerListener);
+    }
+  }
+
+  void stop() {
+    client.stop();
+  }
 
   /// Opens the file with the given [filePath] in the LSP.
   ///
@@ -105,6 +116,15 @@ class LspTester {
         ? filePath
         : path.join(client.rootPath, filePath);
     return 'file://$absolutePath';
+  }
+
+  /// Waits for a notification from the LSP that the analyzer has finished analysis.
+  void _onLspAnalyzerListener(LspNotification notification) {
+    if ((notification.method == r'$/analyzerStatus') &&
+        (notification.params['isAnalyzing'] == false) &&
+        !_pendingAnalysis.isCompleted) {
+      _pendingAnalysis.complete();
+    }
   }
 }
 
