@@ -12,12 +12,24 @@ import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:example/lsp_exploration/lsp/messages/semantic_tokens.dart';
 import 'package:example/lsp_exploration/lsp/messages/type_hierarchy.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 
 class LspClient with ChangeNotifier {
   LspJsonRpcClient? _lspClientCommunication;
 
   LspClientStatus get status => _status;
   LspClientStatus _status = LspClientStatus.notRunning;
+
+  /// The URI of the root project opened with the LSP client.
+  ///
+  /// Available only after the client is initialized.
+  String get rootUri => _rootUri!;
+  String? _rootUri;
+
+  /// The path of the root project opened with the LSP client.
+  ///
+  /// Available only after the client is initialized.
+  String get rootPath => path.fromUri(_rootUri!);
 
   Future<void> start() async {
     _status = LspClientStatus.starting;
@@ -47,6 +59,7 @@ class LspClient with ChangeNotifier {
     }
 
     _status = LspClientStatus.initialized;
+    _rootUri = request.rootUri;
     notifyListeners();
 
     return InitializeResult.fromJson(data.value);
@@ -295,8 +308,6 @@ class LspJsonRpcClient {
   void _onData(List<int> event) {
     _buffer += String.fromCharCodes(event);
 
-    print("_onData - buffer:\n${_buffer.toString()}");
-
     while (_tryParse()) {
       // Keep trying to parse until we either finish parsing the message
       // or we reach the end of the data buffer.
@@ -385,8 +396,6 @@ class LspJsonRpcClient {
     if (commandId == null) {
       // We received a notification.
       // Analyzer status method name:  {jsonrpc: 2.0, method: $/analyzerStatus, params: {isAnalyzing: false}}
-
-      print("LSP Notification: $map");
 
       final notification = LspNotification.fromJson(map);
 
