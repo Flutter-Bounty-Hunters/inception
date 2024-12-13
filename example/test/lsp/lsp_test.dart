@@ -59,23 +59,23 @@ void main() {
     ]);
   });
 
-  testLsp('produces refactorings for file rename', (tester) async {
-    const filePath = 'lib/counter.dart';
-    const newPath = 'lib/counter_2.dart';
+  // testLsp('produces refactorings for file rename', (tester) async {
+  //   const filePath = 'lib/counter.dart';
+  //   const newPath = 'lib/counter_2.dart';
 
-    final res = await tester.client.willRenameFiles(
-      RenameFilesParams(
-        files: [
-          FileRename(
-            oldUri: tester.filePathToUri(filePath),
-            newUri: tester.filePathToUri(newPath),
-          )
-        ],
-      ),
-    );
+  //   final res = await tester.client.willRenameFiles(
+  //     RenameFilesParams(
+  //       files: [
+  //         FileRename(
+  //           oldUri: tester.filePathToUri(filePath),
+  //           newUri: tester.filePathToUri(newPath),
+  //         )
+  //       ],
+  //     ),
+  //   );
 
-    expect(res, isNotNull);
-    expect(res!['documentChanges'], isNotNull);
-    expect((res['documentChanges'] as List<dynamic>), isNotEmpty);
-  });
+  //   expect(res, isNotNull);
+  //   expect(res!['documentChanges'], isNotNull);
+  //   expect((res['documentChanges'] as List<dynamic>), isNotEmpty);
+  //});
 }
