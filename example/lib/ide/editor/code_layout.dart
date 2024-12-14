@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -65,6 +67,74 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   CodePosition findCodePositionNearestLocalOffset(Offset localOffset) {
     final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(localOffset);
     return findCodePositionNearestGlobalOffset(globalOffset);
+  }
+
+  @override
+  List<TextBox> getSelectionBoxesForCodeRange(CodeRange codeRange) {
+    final boxes = <TextBox>[];
+
+    // Add the boxes for the first selected line, which may start at the middle of the line.
+    final firstCodeLine = _lineKeys[codeRange.start.line]!.asCodeLine;
+    final firstCodeLineBoxes = firstCodeLine.getBoxesForSelection(
+      TextSelection(
+        baseOffset: codeRange.start.characterOffset,
+        extentOffset: codeRange.start.line == codeRange.end.line
+            ? codeRange.end.characterOffset
+            : widget.codeLines.first.toPlainText().length,
+      ),
+    );
+    boxes.addAll(_mapCodeLineTextBoxesToLayoutTextBoxes(codeRange.start.line, firstCodeLineBoxes));
+
+    // Add the boxes for the lines between the first and the last, which are fully selected.
+    for (int lineIndex = codeRange.start.line + 1; lineIndex < codeRange.end.line - 1; lineIndex += 1) {
+      final codeLine = _lineKeys[lineIndex]!.asCodeLine;
+      final codeLineBoxes = codeLine.getBoxesForSelection(
+        TextSelection(
+          baseOffset: 0,
+          extentOffset: widget.codeLines[lineIndex].toPlainText().length,
+        ),
+      );
+      boxes.addAll(_mapCodeLineTextBoxesToLayoutTextBoxes(lineIndex, codeLineBoxes));
+    }
+
+    // Add the boxes for the last selected line, which may end at the middle of the line.
+    if (codeRange.start.line != codeRange.end.line) {
+      final lastCodeLine = _lineKeys[codeRange.end.line]!.asCodeLine;
+      final lastCodeLineBoxes = lastCodeLine.getBoxesForSelection(
+        TextSelection(
+          baseOffset: 0,
+          extentOffset: codeRange.end.characterOffset,
+        ),
+      );
+      boxes.addAll(_mapCodeLineTextBoxesToLayoutTextBoxes(codeRange.end.line, lastCodeLineBoxes));
+    }
+
+    return boxes;
+  }
+
+  List<TextBox> _mapCodeLineTextBoxesToLayoutTextBoxes(int lineIndex, List<TextBox> boxes) {
+    final layoutRenderBox = context.findRenderObject() as RenderBox;
+    final codeLineRenderBox = _lineKeys[lineIndex]!.currentContext!.findRenderObject() as RenderBox;
+
+    return boxes.map(
+      (textBox) {
+        final topLeft = layoutRenderBox.globalToLocal(
+          codeLineRenderBox.localToGlobal(Offset(textBox.left, textBox.top)),
+        );
+
+        final bottomRight = layoutRenderBox.globalToLocal(
+          codeLineRenderBox.localToGlobal(Offset(textBox.right, textBox.bottom)),
+        );
+
+        return TextBox.fromLTRBD(
+          topLeft.dx,
+          topLeft.dy,
+          bottomRight.dx,
+          bottomRight.dy,
+          TextDirection.ltr,
+        );
+      },
+    ).toList();
   }
 
   CodeLineLayout _findLineLayoutNearestGlobalOffset(Offset globalOffset) {
@@ -157,6 +227,14 @@ abstract interface class CodeLinesLayout {
 
   /// Returns the [CodePosition] nearest to the given [localOffset].
   CodePosition findCodePositionNearestLocalOffset(Offset localOffset);
+
+  /// Returns a list of [TextBox]es that bound the content selected in the given [codeRange],
+  /// in local coordinates.
+  ///
+  /// See also:
+  ///
+  ///  * [RenderParagraph.getBoxesForSelection].
+  List<TextBox> getSelectionBoxesForCodeRange(CodeRange codeRange);
 }
 
 /// Widget that displays a single line of code text.
@@ -224,12 +302,12 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
 
     final renderParagraph = _renderParagraph;
     final paragraphLocalOffset = renderParagraph.globalToLocal(localOffset, ancestor: codeLineBox);
-    print("Local offset: $paragraphLocalOffset");
+    //print("Local offset: $paragraphLocalOffset");
     final textPosition = renderParagraph.getPositionForOffset(paragraphLocalOffset);
-    print("Text position: $textPosition");
+    //print("Text position: $textPosition");
     final wordRange = renderParagraph.getWordBoundary(textPosition);
-    print("Word range: $wordRange");
-    print("Word: '${renderParagraph.text.toPlainText().substring(wordRange.start, wordRange.end)}'");
+    //print("Word range: $wordRange");
+    //ðprint("Word: '${renderParagraph.text.toPlainText().substring(wordRange.start, wordRange.end)}'");
     return CodeRange(
       CodePosition(widget.lineNumber, wordRange.start),
       CodePosition(widget.lineNumber, wordRange.end),
@@ -247,6 +325,35 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
     final renderParagraph = _renderParagraph;
     final textPosition = renderParagraph.getPositionForOffset(localOffset);
     return CodePosition(widget.lineNumber, textPosition.offset);
+  }
+
+  @override
+  List<TextBox> getBoxesForSelection(TextSelection selection) {
+    final boxes = _renderParagraph.getBoxesForSelection(
+      selection,
+      boxHeightStyle: BoxHeightStyle.max,
+      boxWidthStyle: BoxWidthStyle.max,
+    );
+
+    final renderBox = context.findRenderObject() as RenderBox;
+    return boxes.map(
+      (textBox) {
+        final topLeft = renderBox.globalToLocal(
+          _renderParagraph.localToGlobal(Offset(textBox.left, textBox.top)),
+        );
+        final bottomRight = renderBox.globalToLocal(
+          _renderParagraph.localToGlobal(Offset(textBox.right, textBox.bottom)),
+        );
+
+        return TextBox.fromLTRBD(
+          topLeft.dx,
+          topLeft.dy,
+          bottomRight.dx,
+          bottomRight.dy,
+          TextDirection.ltr,
+        );
+      },
+    ).toList();
   }
 
   RenderParagraph get _renderParagraph => _codeTextKey.currentContext!.findRenderObject() as RenderParagraph;
@@ -351,6 +458,14 @@ abstract interface class CodeLineLayout {
 
   /// Returns the [CodePosition] nearest to the given [localOffset].
   CodePosition findCodePositionNearestLocalOffset(Offset localOffset);
+
+  /// Returns a list of [TextBox]es that bound the given [selection],
+  /// in local coordinates.
+  ///
+  /// See also:
+  ///
+  ///  * [RenderParagraph.getBoxesForSelection].
+  List<TextBox> getBoxesForSelection(TextSelection selection);
 }
 
 class CodeSelection {

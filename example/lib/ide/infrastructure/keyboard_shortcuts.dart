@@ -7,3 +7,9 @@ class IncreaseFontSizeIntent extends Intent {
 class DecreaseFontSizeIntent extends Intent {
   const DecreaseFontSizeIntent();
 }
+
+/// An [Intent] that represents the user desire to open the
+/// code actions popover.
+class CodeActionsIntent extends Intent {
+  const CodeActionsIntent();
+}

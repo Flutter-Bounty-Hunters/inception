@@ -1,7 +1,7 @@
-//import 'package:path/path.dart' as path;
+import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/hover.dart';
-//import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
+import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_tools.dart';
@@ -22,9 +22,46 @@ void main() {
     expect(hover?.contents, isNotEmpty);
   });
 
+  testLsp('produces code actions for a widget', (lspTester) async {
+    const filePath = 'lib/counter.dart';
+
+    await lspTester.openFile(filePath);
+
+    // Query code actions for "MaterialApp" in the build method.
+    final actions = await lspTester.client.codeAction(
+      CodeActionsParams(
+        textDocument: TextDocumentIdentifier(uri: lspTester.filePathToUri(filePath)),
+        range: const Range(
+          start: Position(line: 9, character: 17),
+          end: Position(line: 9, character: 17),
+        ),
+        context: const CodeActionContext(
+          only: [CodeActionKind.refactor],
+          triggerKind: CodeActionTriggerKind.invoked,
+        ),
+      ),
+    );
+
+    // Ensure the expected actions are present.
+    expect(actions!.map((e) => e.title).toList(), [
+      'Wrap with widget...',
+      'Wrap with Builder',
+      'Wrap with StreamBuilder',
+      'Wrap with Center',
+      'Wrap with Container',
+      'Wrap with Padding',
+      'Wrap with SizedBox',
+      'Wrap with Column',
+      'Wrap with Row',
+      'Extract Method',
+      'Extract Local Variable',
+      'Extract Widget',
+    ]);
+  });
+
   // testLsp('produces refactorings for file rename', (tester) async {
-  //   const filePath = 'lib/ide/editor/editor.dart';
-  //   final newPath = '${path.dirname(filePath)}/editor_renamed.dart';
+  //   const filePath = 'lib/counter.dart';
+  //   const newPath = 'lib/counter_2.dart';
 
   //   final res = await tester.client.willRenameFiles(
   //     RenameFilesParams(
@@ -38,7 +75,7 @@ void main() {
   //   );
 
   //   expect(res, isNotNull);
-  //   expect(res!['changes'], isNotNull);
-  //   expect((res['changes'] as Map<String, dynamic>).keys, isNotEmpty);
-  // });
+  //   expect(res!['documentChanges'], isNotNull);
+  //   expect((res['documentChanges'] as List<dynamic>), isNotEmpty);
+  //});
 }

@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# We don't need the platform folders for this project
+/macos
+/windows
+/linux
+/android
+/ios
+/web

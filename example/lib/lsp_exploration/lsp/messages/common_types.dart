@@ -41,10 +41,11 @@ class Position {
 }
 
 class Range {
-  Range({
+  const Range({
     required this.start,
     required this.end,
   });
+
   final Position start;
   final Position end;
 

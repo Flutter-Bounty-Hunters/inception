@@ -1,3 +1,5 @@
+import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
+
 class InitializeParams {
   InitializeParams({
     this.processId,
@@ -98,14 +100,43 @@ class WorkspaceFolder {
 
 class LspClientCapabilities {
   Map<String, dynamic> toJson() => {
+        'experimental': {
+          // To receive code actions like "Wrap with widget", the LSP relies on
+          // a feature called "Snippets Text Edit". This feature is not yet
+          // released in a LSP version, but the Dart LSP server already supports
+          // it behind this experimental flag.
+          'snippetTextEdit': true,
+        },
+        'textDocument': {
+          'codeAction': {
+            'codeActionLiteralSupport': {
+              'codeActionKind': {
+                'valueSet': [
+                  CodeActionKind.quickFix,
+                  CodeActionKind.refactor,
+                  CodeActionKind.refactorExtract,
+                  CodeActionKind.refactorInline,
+                  CodeActionKind.refactorRewrite,
+                  CodeActionKind.source,
+                  CodeActionKind.sourceFixAll,
+                  CodeActionKind.sourceOrganizeImports,
+                ]
+              }
+            },
+          },
+        },
         'workspace': {
+          // This capability is required for the Dart LSP server to provide code actions.
+          'applyEdit': true,
           'workspaceEdit': {
+            // This capability is required for the Dart LSP server to provide code actions.
+            'documentChanges': true,
             'resourceOperations': ['create', 'rename', 'delete']
           },
           'fileOperations': {
             'willRename': true,
           }
-        }
+        },
       };
 }
 
