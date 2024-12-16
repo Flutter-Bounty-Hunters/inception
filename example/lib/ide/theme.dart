@@ -8,6 +8,9 @@ const dividerColor = Color(0xFF1C2022);
 const popoverBackgroundColor = Color(0xFF202224);
 const popoverBorderColor = Color(0xFF34353A);
 
+const lineColor = Color(0xFF1C2022);
+const indentLineColor = Color(0xFF333333);
+
 // Makes text light, for use during dark mode styling.
 final darkModeStyles = [
   StyleRule(
