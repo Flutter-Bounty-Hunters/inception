@@ -280,8 +280,11 @@ class BottomBar extends StatelessWidget {
         ),
       ],
     );
+
     final data = await lspClient.willRenameFiles(params);
     print("Rename file data: $data");
+
+    // TODO: modify names, apply changes.
 
     await lspClient.didRenameFiles(params);
   }
