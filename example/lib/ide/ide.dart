@@ -254,41 +254,6 @@ class BottomBar extends StatelessWidget {
   final bool isAnalyzing;
   final String? currentFilePath;
 
-  Future<void> _renameFile(BuildContext context) async {
-    if (currentFilePath == null) {
-      throw Exception("No file is currently open");
-    }
-
-    print("Rename file");
-    final newFileName = await showDialog<String>(
-        context: context,
-        builder: (context) {
-          return const RenameFileDialog();
-        });
-    final root = UserSettings().contentDirectory;
-    print('root: $root');
-
-    final newFilePath = path.join(path.dirname(currentFilePath!), "$newFileName${path.extension(currentFilePath!)}");
-    print("New file path: $newFilePath");
-
-    final params = RenameFilesParams(
-      files: [
-        FileRename(
-          oldUri: "file://${currentFilePath!}",
-          newUri: "file://$newFilePath",
-          // TODO: Create a object to serialize the file path as understood by the LSP. Eg. file://$root/example/lib/ide/idea.dart
-        ),
-      ],
-    );
-
-    final data = await lspClient.willRenameFiles(params);
-    print("Rename file data: $data");
-
-    // TODO: modify names, apply changes.
-
-    await lspClient.didRenameFiles(params);
-  }
-
   @override
   Widget build(BuildContext context) {
     return DefaultTextStyle(
@@ -345,15 +310,10 @@ class BottomBar extends StatelessWidget {
             Text("LSP: $_lspClientStatus"),
             const SizedBox(width: 8),
             // This is here to experiment with the LspClient
-            GestureDetector(
-              onTap: () {
-                _renameFile(context);
-              },
-              child: const Icon(
-                Icons.science_outlined,
-                size: 14,
-                color: Colors.lightBlueAccent,
-              ),
+            const Icon(
+              Icons.science_outlined,
+              size: 14,
+              color: Colors.lightBlueAccent,
             ),
             const SizedBox(width: 10),
             GestureDetector(
@@ -505,6 +465,7 @@ class _ContentAreaState extends State<ContentArea> {
               ),
             ),
             child: FileExplorer(
+              lspClient: widget.workspace.lspClient,
               directory: widget.workspace.directory,
               onFileOpenRequested: (file) async {
                 _fileContent.value = file.readAsStringSync();
