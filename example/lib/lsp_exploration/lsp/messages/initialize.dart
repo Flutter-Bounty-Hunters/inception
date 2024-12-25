@@ -133,6 +133,7 @@ class LspClientCapabilities {
             'documentChanges': true,
             'resourceOperations': ['create', 'rename', 'delete']
           },
+          "workspaceFolders": true,
           'fileOperations': {
             'willRename': true,
           }
