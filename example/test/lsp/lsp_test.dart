@@ -5,6 +5,7 @@ import 'package:example/ide/workspace.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
+import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
 import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:example/main.dart';
@@ -89,11 +90,38 @@ void main() {
   //});
 
   testLsp('lists test files', (lspTester) async {
-    const testFolder = './test/lsp';
+    try {
+      const testFolder = './test/lsp';
 
-    final directory = Directory(testFolder);
+      final directory = Directory(testFolder);
 
-    directory.listSync().forEach((e) => print('File: ${e.path} --- ${isTestFile(e.path)}'));
+      List<String> testFiles = [];
+
+      directory.listSync().forEach((e) {
+        if (isTestFile(e.path)) {
+          testFiles.add(e.path);
+        }
+      });
+
+      print('Test Files: $testFiles');
+
+      const filepath =
+          "file:///Users/rutviktak/flutter_projects/os_contributions/inception/example/test/lsp/lsp_test.dart"; //lspTester.filePathToUri(testFiles.first);
+
+      print("File path-->$filepath");
+
+      final documentSymboles = await lspTester.client.documentSymbols(
+        DocumentSymbolsParams(textDocument: const TextDocumentIdentifier(uri: filepath)),
+      );
+
+      print('Document Symbols: $documentSymboles');
+
+      // discover test suites within each test file
+    } on LspResponseError catch (e) {
+      print('Error: ${e.message}');
+    } catch (e) {
+      print('Error: $e');
+    }
   });
 }
 
@@ -121,16 +149,11 @@ bool isInsideFolderNamed(String? file, String folderName) {
 
   final ws = path.dirname(file); // workspace.getWorkspaceFolder(Uri.file(file));
 
-  print('WS: $ws');
-
   if (ws == ".") return false;
 
   final relPath = path.relative(fsPath(Uri.parse(ws)).toLowerCase(), from: file.toLowerCase());
 
-  print('RelPath: $relPath');
   final segments = relPath.split(path.separator);
-
-  print('segments: $segments');
 
   return segments.contains(folderName.toLowerCase());
 }
