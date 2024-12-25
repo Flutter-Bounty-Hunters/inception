@@ -88,7 +88,7 @@ void main() {
   //   expect((res['documentChanges'] as List<dynamic>), isNotEmpty);
   //});
 
-  testLsp('gets active dir ', (lspTester) async {
+  testLsp('lists test files', (lspTester) async {
     const testFolder = './test/lsp';
 
     final directory = Directory(testFolder);
