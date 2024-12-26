@@ -105,7 +105,6 @@ class _FileExplorerState extends State<FileExplorer> {
   }
 
   Future<void> _renameFile(BuildContext context, String currentFilePath) async {
-    print("Rename file");
     final newFileName = await showDialog<String>(
         context: context,
         builder: (context) {
