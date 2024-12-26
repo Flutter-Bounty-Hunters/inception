@@ -114,7 +114,20 @@ void main() {
         DocumentSymbolsParams(textDocument: const TextDocumentIdentifier(uri: filepath)),
       );
 
-      print('Document Symbols: $documentSymboles');
+      for (var element in documentSymboles!) {
+        switch (element.kind) {
+          case SymbolKind.method:
+            final testDescription = extractTestNameFromOutline(element.name);
+
+            print('Document Symbols: ${element.kind} $testDescription');
+            break;
+          case SymbolKind.function:
+            break;
+          default:
+        }
+      }
+
+      // filter methods
 
       // discover test suites within each test file
     } on LspResponseError catch (e) {
@@ -178,4 +191,21 @@ String fsPath(Uri uri, {useRealCasing = false}) {
   // newPath = forceWindowsDriveLetterToUppercase(newPath);
 
   // return newPath;
+}
+
+String? extractTestNameFromOutline(String elementName) {
+  // Strip off the function name/parent like test( or testWidget(
+  final openParen = elementName.indexOf("(");
+  final closeParen = elementName.lastIndexOf(")");
+  if (openParen == -1 || closeParen == -1 || openParen >= closeParen) return null;
+
+  elementName = elementName.substring(openParen + 2, closeParen - 1);
+
+  // For tests with variables, we often end up with additional quotes wrapped
+  // around them...
+  if ((elementName.startsWith("'") || elementName.startsWith('"')) &&
+      (elementName.endsWith("'") || elementName.endsWith('"')))
+    elementName = elementName.substring(1, elementName.length - 1);
+
+  return elementName;
 }
