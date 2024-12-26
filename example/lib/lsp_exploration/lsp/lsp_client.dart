@@ -24,6 +24,8 @@ class LspClient with ChangeNotifier {
 
   LspJsonRpcClient? _lspClientCommunication;
 
+  LspJsonRpcClient? get lspClientCommunication => _lspClientCommunication;
+
   LspClientStatus get status => _status;
   LspClientStatus _status = LspClientStatus.notRunning;
 
