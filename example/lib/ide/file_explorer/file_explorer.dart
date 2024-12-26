@@ -115,11 +115,7 @@ class _FileExplorerState extends State<FileExplorer> {
       return;
     }
 
-    final root = UserSettings().contentDirectory;
-    print('root: $root');
-
     final newFilePath = path.join(path.dirname(currentFilePath), "$newFileName${path.extension(currentFilePath)}");
-    print("New file path: $newFilePath");
 
     final params = RenameFilesParams(
       files: [
@@ -131,8 +127,7 @@ class _FileExplorerState extends State<FileExplorer> {
       ],
     );
 
-    final data = await widget.lspClient.willRenameFiles(params);
-    print("Rename file data: $data");
+    await widget.lspClient.willRenameFiles(params);
 
     // TODO: modify names, apply changes.
 
