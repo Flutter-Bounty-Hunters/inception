@@ -114,12 +114,18 @@ void main() {
         DocumentSymbolsParams(textDocument: const TextDocumentIdentifier(uri: filepath)),
       );
 
+      List<String> tests = [];
+
       for (var element in documentSymboles!) {
         switch (element.kind) {
           case SymbolKind.method:
-            final testDescription = extractTestNameFromOutline(element.name);
+            final bool isTestGroup = element.name.startsWith("group(");
 
-            print('Document Symbols: ${element.kind} $testDescription');
+            if (!isTestGroup) {
+              final testDescription = extractTestNameFromOutline(element.name);
+
+              if (testDescription != null) tests.add(testDescription);
+            }
             break;
           case SymbolKind.function:
             break;
@@ -127,7 +133,7 @@ void main() {
         }
       }
 
-      // filter methods
+      print('Tests: $tests');
 
       // discover test suites within each test file
     } on LspResponseError catch (e) {
