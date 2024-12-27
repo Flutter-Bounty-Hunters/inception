@@ -1,9 +1,16 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:example/ide/ide.dart';
+import 'package:example/ide/infrastructure/user_settings.dart';
+import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:two_dimensional_scrollables/two_dimensional_scrollables.dart';
+import 'package:path/path.dart' as path;
+
+import '../../lsp_exploration/lsp/messages/rename_files_params.dart';
 
 // TODO:
 //  - switch from single, double tap recognizers to multi-tap to get rid of selection delay
@@ -30,9 +37,11 @@ class FileExplorer extends StatefulWidget {
     super.key,
     required this.directory,
     required this.onFileOpenRequested,
+    required this.lspClient,
   });
 
   final Directory directory;
+  final LspClient lspClient;
 
   final void Function(File) onFileOpenRequested;
 
@@ -50,6 +59,8 @@ class _FileExplorerState extends State<FileExplorer> {
 
   late final List<FileSystemEntityTreeViewNode> _tree;
   FileSystemEntityTreeViewNode? _selectedNode;
+
+  final FocusNode _treeRowFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -91,6 +102,36 @@ class _FileExplorerState extends State<FileExplorer> {
         ),
       );
     }
+  }
+
+  Future<void> _renameFile(BuildContext context, String currentFilePath) async {
+    final String? newFileName = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          return const RenameFileDialog();
+        });
+
+    if (newFileName == null) {
+      return;
+    }
+
+    final newFilePath = path.join(path.dirname(currentFilePath), "$newFileName${path.extension(currentFilePath)}");
+
+    final params = RenameFilesParams(
+      files: [
+        FileRename(
+          oldUri: "file://$currentFilePath",
+          newUri: "file://$newFilePath",
+          // TODO: Create a object to serialize the file path as understood by the LSP. Eg. file://$root/example/lib/ide/idea.dart
+        ),
+      ],
+    );
+
+    await widget.lspClient.willRenameFiles(params);
+
+    // TODO: modify names, apply changes.
+
+    await widget.lspClient.didRenameFiles(params);
   }
 
   static const _rowHeight = 28.0;
@@ -201,17 +242,27 @@ class _FileExplorerState extends State<FileExplorer> {
         const SizedBox(width: 4.0),
         // Content
         Center(
-          child: Row(
-            children: [
-              _getIconForNode(node),
-              const SizedBox(width: 8),
-              Text(
-                node.title,
-                style: const TextStyle(
-                  fontSize: 14,
+          child: KeyboardListener(
+            focusNode: _treeRowFocusNode,
+            onKeyEvent: (value) {
+              if (value.logicalKey == LogicalKeyboardKey.enter) {
+                if (node.isFile) {
+                  _renameFile(context, _selectedNode!.asFile.path);
+                }
+              }
+            },
+            child: Row(
+              children: [
+                _getIconForNode(node),
+                const SizedBox(width: 8),
+                Text(
+                  node.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -249,13 +300,13 @@ class _FileExplorerState extends State<FileExplorer> {
           // Open document.
           setState(() {
             _selectedNode = node;
+            _treeRowFocusNode.requestFocus();
           });
 
-          if(node.isFile){
+          if (node.isFile) {
             // Open document.
             widget.onFileOpenRequested(node.asFile);
           }
-
         },
       ),
       DoubleTapGestureRecognizer: GestureRecognizerFactoryWithHandlers<DoubleTapGestureRecognizer>(
