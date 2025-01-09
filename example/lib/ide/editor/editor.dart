@@ -397,33 +397,31 @@ class _IdeEditorState extends State<IdeEditor> {
         child: Focus(
           focusNode: _focusNode,
           autofocus: true,
-          child: InteractiveViewer(
-            constrained: false,
-            scaleEnabled: false,
-            child: MouseRegion(
-              onHover: _onHover,
-              onExit: (event) => _hoverOverlayController.hide(),
+          child: MouseRegion(
+            onHover: _onHover,
+            onExit: (event) => _hoverOverlayController.hide(),
+            child: OverlayPortal(
+              controller: _hoverOverlayController,
+              overlayChildBuilder: (context) => _buildHoverOverlay(),
               child: OverlayPortal(
-                controller: _hoverOverlayController,
-                overlayChildBuilder: (context) => _buildHoverOverlay(),
-                child: OverlayPortal(
-                  controller: _actionsOverlayController,
-                  overlayChildBuilder: (context) => _buildCodeActionsPopover(),
-                  child: Stack(
-                    children: [
-                      _buildCursorHoverLeader(),
-                      _buildCodeActionsLeader(),
-                      GestureDetector(
+                controller: _actionsOverlayController,
+                overlayChildBuilder: (context) => _buildCodeActionsPopover(),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
                         onTapUp: _onTapUp,
                         child: CodeLines(
                           key: _linesKey,
                           codeLines: _styledLines,
-                          indentLineColor: _lineColor,
+                          indentLineColor: indentLineColor,
                           baseTextStyle: _baseCodeStyle,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    _buildCursorHoverLeader(),
+                    _buildCodeActionsLeader(),
+                  ],
                 ),
               ),
             ),
@@ -601,5 +599,3 @@ const _baseCodeStyle = TextStyle(
   fontSize: 16,
   fontWeight: FontWeight.w900,
 );
-
-const _lineColor = Color(0xFF333333);

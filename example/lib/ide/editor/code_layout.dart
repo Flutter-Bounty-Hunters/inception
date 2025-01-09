@@ -1,5 +1,8 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:example/ide/theme.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -180,13 +183,36 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.text,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (int i = 0; i < widget.codeLines.length; i += 1) //
-            _buildCodeLine(i),
-        ],
+      child: widget.codeLines.isNotEmpty
+          ? CodeScroller(
+              delegate: TwoDimensionalChildBuilderDelegate(
+                maxXIndex: 1,
+                maxYIndex: widget.codeLines.length - 1,
+                builder: (context, vicinity) {
+                  if (vicinity.xIndex == 0) {
+                    return _buildLineIndicator(vicinity.yIndex);
+                  }
+
+                  return _buildCodeLine(vicinity.yIndex);
+                },
+              ),
+            )
+          : const SizedBox(),
+    );
+  }
+
+  Widget _buildLineIndicator(int lineIndex) {
+    return ColoredBox(
+      color: lineColor,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 20),
+        child: Text(
+          " ${lineIndex + 1}",
+          textAlign: TextAlign.right,
+          style: widget.baseTextStyle.copyWith(
+            color: Colors.white.withValues(alpha: 0.3),
+          ),
+        ),
       ),
     );
   }
@@ -378,7 +404,7 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(width: 100 + 8),
+            const SizedBox(width: 2),
             for (int i = 0; i < tabCount; i += 1) //
               DecoratedBox(
                 decoration: BoxDecoration(
@@ -396,33 +422,279 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
               ),
           ],
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 100,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 64),
-                child: Text(
-                  "${widget.lineNumber + 1}",
-                  textAlign: TextAlign.right,
-                  style: widget.baseTextStyle.copyWith(
-                    color: Colors.white.withOpacity(0.3),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text.rich(
-              key: _codeTextKey,
-              widget.code,
-              style: widget.baseTextStyle,
-            ),
-          ],
+        Text.rich(
+          key: _codeTextKey,
+          widget.code,
+          style: widget.baseTextStyle,
         ),
       ],
     );
+  }
+}
+
+class CodeScroller extends TwoDimensionalScrollView {
+  const CodeScroller({
+    super.key,
+    super.primary,
+    super.mainAxis = Axis.vertical,
+    super.verticalDetails = const ScrollableDetails.vertical(physics: ClampingScrollPhysics()),
+    super.horizontalDetails = const ScrollableDetails.horizontal(physics: ClampingScrollPhysics()),
+    required TwoDimensionalChildBuilderDelegate delegate,
+    super.cacheExtent,
+    super.diagonalDragBehavior = DiagonalDragBehavior.free,
+    super.dragStartBehavior = DragStartBehavior.start,
+    super.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
+    super.clipBehavior = Clip.hardEdge,
+  }) : super(delegate: delegate);
+
+  @override
+  Widget buildViewport(
+    BuildContext context,
+    ViewportOffset verticalOffset,
+    ViewportOffset horizontalOffset,
+  ) {
+    return CodeScrollerViewport(
+      horizontalOffset: horizontalOffset,
+      horizontalAxisDirection: horizontalDetails.direction,
+      verticalOffset: verticalOffset,
+      verticalAxisDirection: verticalDetails.direction,
+      mainAxis: mainAxis,
+      delegate: delegate as TwoDimensionalChildBuilderDelegate,
+      cacheExtent: cacheExtent,
+      clipBehavior: clipBehavior,
+    );
+  }
+}
+
+class CodeScrollerViewport extends TwoDimensionalViewport {
+  const CodeScrollerViewport({
+    super.key,
+    required super.verticalOffset,
+    required super.verticalAxisDirection,
+    required super.horizontalOffset,
+    required super.horizontalAxisDirection,
+    required TwoDimensionalChildBuilderDelegate super.delegate,
+    required super.mainAxis,
+    super.cacheExtent,
+    super.clipBehavior = Clip.hardEdge,
+  });
+
+  @override
+  RenderTwoDimensionalViewport createRenderObject(BuildContext context) {
+    return RenderCodeScrollerViewport(
+      horizontalOffset: horizontalOffset,
+      horizontalAxisDirection: horizontalAxisDirection,
+      verticalOffset: verticalOffset,
+      verticalAxisDirection: verticalAxisDirection,
+      mainAxis: mainAxis,
+      delegate: delegate as TwoDimensionalChildBuilderDelegate,
+      childManager: context as TwoDimensionalChildManager,
+      cacheExtent: cacheExtent,
+      clipBehavior: clipBehavior,
+    );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderCodeScrollerViewport renderObject,
+  ) {
+    renderObject
+      ..horizontalOffset = horizontalOffset
+      ..horizontalAxisDirection = horizontalAxisDirection
+      ..verticalOffset = verticalOffset
+      ..verticalAxisDirection = verticalAxisDirection
+      ..mainAxis = mainAxis
+      ..delegate = delegate
+      ..cacheExtent = cacheExtent
+      ..clipBehavior = clipBehavior;
+  }
+}
+
+class RenderCodeScrollerViewport extends RenderTwoDimensionalViewport {
+  RenderCodeScrollerViewport({
+    required super.horizontalOffset,
+    required super.horizontalAxisDirection,
+    required super.verticalOffset,
+    required super.verticalAxisDirection,
+    required TwoDimensionalChildBuilderDelegate delegate,
+    required super.mainAxis,
+    required super.childManager,
+    super.cacheExtent,
+    super.clipBehavior = Clip.hardEdge,
+  }) : super(delegate: delegate);
+
+  final LayerHandle<ClipRectLayer> _clipRectLayer = LayerHandle<ClipRectLayer>();
+
+  late ChildVicinity _leadingVicinity;
+  late ChildVicinity _trailingVicinity;
+
+  @override
+  void dispose() {
+    _clipRectLayer.layer = null;
+    super.dispose();
+  }
+
+  @override
+  void layoutChildSequence() {
+    final builderDelegate = delegate as TwoDimensionalChildBuilderDelegate;
+
+    // We only have two columns, the line indicator, and the line itself.
+    assert(builderDelegate.maxXIndex == 1);
+
+    final verticalPixels = verticalOffset.pixels;
+    final viewportHeight = viewportDimension.height + cacheExtent;
+    final maxRowIndex = builderDelegate.maxYIndex!;
+
+    // We need to layout all children to compute the maximum line width
+    // and maximum indicator width.
+    //
+    // To do this, we need to call buildOrObtainChildFor for each vicinity. Calling
+    // buildOrObtainChildFor more than once for the same vinicity throws an
+    // assertion error.
+    //
+    // Cache the children to avoid that.
+    final childrenCache = <ChildVicinity, RenderBox>{};
+
+    // The line height is computed when the first line is laid out.
+    double lineHeight = 0;
+
+    double maxLineIndicatorWidth = 0;
+    double maxLineWidth = 0;
+    for (int i = 0; i <= maxRowIndex; i++) {
+      // Compute the maximum width of the line indicator.
+      // We will layout all of them after with the same width.
+      final lineIndicatorVicinity = ChildVicinity(xIndex: 0, yIndex: i);
+      final lineIndicator = buildOrObtainChildFor(lineIndicatorVicinity)!;
+      childrenCache[lineIndicatorVicinity] = lineIndicator;
+
+      final lineIndicatorSize = lineIndicator.getDryLayout(
+        constraints.loosen().copyWith(maxWidth: double.infinity),
+      );
+      if (lineIndicatorSize.width > maxLineIndicatorWidth) {
+        maxLineIndicatorWidth = lineIndicatorSize.width;
+      }
+
+      // We are required to set the layoutOffset for each obtained child,
+      // even if we won't paint it. Otherwise, an assertion error is thrown.
+      parentDataOf(lineIndicator).layoutOffset = const Offset(double.infinity, double.infinity);
+
+      // Layout the code line.
+      final codeLineVicinity = ChildVicinity(xIndex: 1, yIndex: i);
+      final codeLine = buildOrObtainChildFor(codeLineVicinity)!;
+      childrenCache[codeLineVicinity] = codeLine;
+
+      codeLine.layout(
+        constraints.loosen().copyWith(maxWidth: double.infinity),
+        parentUsesSize: true,
+      );
+      if (codeLine.size.width > maxLineWidth) {
+        maxLineWidth = codeLine.size.width;
+      }
+
+      if (lineHeight == 0) {
+        lineHeight = codeLine.size.height;
+      }
+
+      // We are required to set the layoutOffset for each obtained child,
+      // even if we won't paint it. Otherwise, an assertion error is thrown.
+      parentDataOf(codeLine).layoutOffset = const Offset(double.infinity, double.infinity);
+    }
+
+    // Now that we have maximum indicator width, layout each indicator with the same width.
+    for (int i = 0; i <= maxRowIndex; i++) {
+      final lineIndicatorVicinity = ChildVicinity(xIndex: 0, yIndex: i);
+      final lineIndicator = childrenCache[lineIndicatorVicinity]!;
+      lineIndicator.layout(
+        constraints.copyWith(
+          minWidth: maxLineIndicatorWidth,
+          maxWidth: maxLineIndicatorWidth,
+        ),
+      );
+    }
+
+    // First row that will be painted.
+    final leadingRow = math.max((verticalPixels / lineHeight).floor(), 0);
+
+    // Last row that will be painted.
+    final trailingRow = math.min(
+      ((verticalPixels + viewportHeight) / lineHeight).ceil(),
+      maxRowIndex,
+    );
+
+    _leadingVicinity = ChildVicinity(xIndex: 0, yIndex: leadingRow);
+    _trailingVicinity = ChildVicinity(xIndex: 1, yIndex: trailingRow);
+
+    double yLayoutOffset = (leadingRow * lineHeight) - verticalOffset.pixels;
+
+    // Compute the offset for each visible line.
+    for (int row = leadingRow; row <= trailingRow; row++) {
+      // Layout the indicator, which is pinned and scrolls only vertically.
+      final lineIndicatorVicinity = ChildVicinity(xIndex: 0, yIndex: row);
+      final lineIndicator = childrenCache[lineIndicatorVicinity]!;
+      parentDataOf(lineIndicator).layoutOffset = Offset(0, yLayoutOffset);
+
+      final codeLineVicinity = ChildVicinity(xIndex: 1, yIndex: row);
+      final codeLine = childrenCache[codeLineVicinity]!;
+      parentDataOf(codeLine).layoutOffset = Offset(maxLineIndicatorWidth - horizontalOffset.pixels, yLayoutOffset);
+
+      // Move to the next line.
+      yLayoutOffset += lineHeight;
+    }
+
+    // Set the min and max scroll extents for each axis.
+    final verticalExtent = lineHeight * (maxRowIndex + 1);
+    verticalOffset.applyContentDimensions(
+      0.0,
+      clampDouble(verticalExtent - viewportDimension.height, 0.0, double.infinity),
+    );
+
+    final horizontalExtent = maxLineWidth + maxLineIndicatorWidth;
+    horizontalOffset.applyContentDimensions(
+      0.0,
+      clampDouble(horizontalExtent - viewportDimension.width, 0.0, double.infinity),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (clipBehavior != Clip.none) {
+      _clipRectLayer.layer = context.pushClipRect(
+        needsCompositing,
+        offset,
+        Offset.zero & viewportDimension,
+        _paintChildren,
+        clipBehavior: clipBehavior,
+        oldLayer: _clipRectLayer.layer,
+      );
+    } else {
+      _clipRectLayer.layer = null;
+      _paintChildren(context, offset);
+    }
+  }
+
+  void _paintChildren(PaintingContext context, Offset offset) {
+    // Paint only visible lines.
+    for (int currentRow = _leadingVicinity.yIndex; currentRow <= _trailingVicinity.yIndex; currentRow++) {
+      final codeLineVicinity = ChildVicinity(
+        yIndex: currentRow,
+        xIndex: 1,
+      );
+      final codeLine = getChildFor(codeLineVicinity);
+      if (codeLine != null) {
+        context.paintChild(codeLine, parentDataOf(codeLine).layoutOffset! + offset);
+      }
+
+      // Paint the first column, which is pinned and scrolls only vertically.
+      final lineIndicatorVicinity = ChildVicinity(
+        yIndex: currentRow,
+        xIndex: 0,
+      );
+      final lineIndicator = getChildFor(lineIndicatorVicinity);
+      if (lineIndicator != null) {
+        context.paintChild(lineIndicator, parentDataOf(lineIndicator).layoutOffset! + offset);
+      }
+    }
   }
 }
 

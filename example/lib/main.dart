@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:example/ide/ide.dart';
 import 'package:example/ide/infrastructure/user_settings.dart';
@@ -8,8 +9,11 @@ import 'package:flutter/material.dart';
 
 void main() {
   runApp(
-    const MaterialApp(
-      home: _Screen(),
+    MaterialApp(
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        dragDevices: PointerDeviceKind.values.toSet(),
+      ),
+      home: const _Screen(),
     ),
   );
 }
