@@ -10,6 +10,9 @@ import 'package:flutter/material.dart';
 void main() {
   runApp(
     MaterialApp(
+      theme: ThemeData(
+        brightness: Brightness.dark,
+      ),
       scrollBehavior: const MaterialScrollBehavior().copyWith(
         dragDevices: PointerDeviceKind.values.toSet(),
       ),

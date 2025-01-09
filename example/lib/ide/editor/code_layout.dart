@@ -2,9 +2,11 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:example/ide/theme.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:super_editor/super_editor.dart';
 
 // TODO: Define and implement a CodeLinesLayout, similar to CodeLineLayout, but
 //       for the whole file.
@@ -231,6 +233,20 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   }
 }
 
+ContentLayerWidget buildCaretOverlay(BuildContext context) {
+  return const CodeCaretOverlay();
+}
+
+class CodeCaretOverlay extends ContentLayerStatelessWidget {
+  const CodeCaretOverlay({super.key});
+
+  @override
+  Widget doBuild(BuildContext context, Element? contentElement, RenderObject? contentLayout) {
+    // TODO: implement doBuild
+    throw UnimplementedError();
+  }
+}
+
 extension CodeLinesLayoutFromContext on GlobalKey {
   /// Assumes this [GlobalKey] is attached to a [CodeLines] widget, and returns
   /// the [CodeLinesLayout] for the code layout.
@@ -406,7 +422,7 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
       tabCount = (leadingSpaceMatch.end ~/ 2) - 1;
     }
 
-    return Stack(
+    return Row(
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,

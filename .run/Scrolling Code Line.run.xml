@@ -1,0 +1,6 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Scrolling Code Line" type="FlutterRunConfigurationType" factoryName="Flutter">
+    <option name="filePath" value="$PROJECT_DIR$/example/lib/main_scrollable_line_demo.dart" />
+    <method v="2" />
+  </configuration>
+</component>
