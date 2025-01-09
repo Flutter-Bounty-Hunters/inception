@@ -367,29 +367,25 @@ class _IdeEditorState extends State<IdeEditor> {
         child: Focus(
           focusNode: _focusNode,
           autofocus: true,
-          child: InteractiveViewer(
-            constrained: false,
-            scaleEnabled: false,
-            child: MouseRegion(
-              onHover: _onHover,
-              onExit: (event) => _hoverOverlayController.hide(),
-              child: OverlayPortal(
-                controller: _hoverOverlayController,
-                overlayChildBuilder: (context) => _buildHoverOverlay(),
-                child: Stack(
-                  children: [
-                    _buildCursorHoverLeader(),
-                    GestureDetector(
-                      onTapUp: _onTapUp,
-                      child: CodeLines(
-                        key: _linesKey,
-                        codeLines: _styledLines,
-                        indentLineColor: _lineColor,
-                        baseTextStyle: _baseCodeStyle,
-                      ),
+          child: MouseRegion(
+            onHover: _onHover,
+            onExit: (event) => _hoverOverlayController.hide(),
+            child: OverlayPortal(
+              controller: _hoverOverlayController,
+              overlayChildBuilder: (context) => _buildHoverOverlay(),
+              child: Stack(
+                children: [
+                  _buildCursorHoverLeader(),
+                  GestureDetector(
+                    onTapUp: _onTapUp,
+                    child: CodeLines(
+                      key: _linesKey,
+                      codeLines: _styledLines,
+                      indentLineColor: _lineColor,
+                      baseTextStyle: _baseCodeStyle,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

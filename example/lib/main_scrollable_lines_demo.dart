@@ -1,3 +1,214 @@
+import 'package:example/ide/editor/scrolling_code_line.dart';
+import 'package:example/ide/editor/syntax_highlighting.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:syntax_highlight/syntax_highlight.dart';
+
+void main() {
+  runApp(
+    MaterialApp(
+      theme: ThemeData(brightness: Brightness.dark),
+      home: const Scaffold(
+        backgroundColor: Color(0xFF222222),
+        body: _ScrollingLineScreen(),
+      ),
+    ),
+  );
+}
+
+class _ScrollingLineScreen extends StatefulWidget {
+  const _ScrollingLineScreen();
+
+  @override
+  State<_ScrollingLineScreen> createState() => _ScrollingLineScreenState();
+}
+
+class _ScrollingLineScreenState extends State<_ScrollingLineScreen>
+    with TickerProviderStateMixin
+    implements ScrollActivityDelegate {
+  final _verticalScrollController = ScrollController();
+  double _horizontalScrollOffset = 0;
+
+  List<TextSpan>? _styledLines;
+
+  Duration? _lastScrollTime;
+  Axis? _activeScrollDirection;
+  double _velocity = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _highlightSyntax();
+  }
+
+  @override
+  void dispose() {
+    _verticalScrollController.dispose();
+
+    super.dispose();
+  }
+
+  Future<void> _highlightSyntax() async {
+    await Highlighter.initialize(['dart', 'yaml']);
+
+    var theme = await HighlighterTheme.loadDarkTheme();
+
+    final highlighter = Highlighter(
+      language: 'dart',
+      theme: theme,
+    );
+
+    setState(() {
+      _styledLines = highlightSyntaxByLine(highlighter, _code);
+
+      for (final span in _styledLines!) {
+        final buffer = StringBuffer();
+        span.computeToPlainText(buffer);
+      }
+    });
+  }
+
+  void _onPanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    final scrollDelta = event.panDelta;
+
+    // Stop any ongoing horizontal scroll momentum.
+    _horizontalBallisticActivity?.delegate.goIdle();
+    _horizontalBallisticActivity = null;
+
+    if (scrollDelta.distance == 0) {
+      return;
+    }
+
+    _activeScrollDirection ??= scrollDelta.dy.abs() >= scrollDelta.dx.abs() //
+        ? Axis.vertical
+        : Axis.horizontal;
+
+    final secondsSinceLastEvent =
+        _lastScrollTime != null ? (event.timeStamp - _lastScrollTime!).inMilliseconds / 1000 : 0;
+
+    switch (_activeScrollDirection!) {
+      case Axis.vertical:
+        _verticalScrollController.position.pointerScroll(-scrollDelta.dy);
+        _velocity = secondsSinceLastEvent > 0 //
+            ? -scrollDelta.dy / secondsSinceLastEvent
+            : _velocity;
+      case Axis.horizontal:
+        setState(() {
+          _horizontalScrollOffset = (_horizontalScrollOffset - scrollDelta.dx).clamp(0, double.infinity);
+          _velocity = secondsSinceLastEvent > 0 //
+              ? -scrollDelta.dx / secondsSinceLastEvent
+              : _velocity;
+        });
+    }
+
+    _lastScrollTime = event.timeStamp;
+  }
+
+  void _onPanZoomEnd(PointerPanZoomEndEvent event) {
+    if (_activeScrollDirection != null) {
+      print("------- END -------");
+      print("Velocity: $_velocity");
+      switch (_activeScrollDirection!) {
+        case Axis.vertical:
+          _goBallisticVertical();
+        case Axis.horizontal:
+          _goBallisticHorizontal();
+      }
+    }
+
+    _activeScrollDirection = null;
+    _velocity = 0;
+  }
+
+  void _goBallisticVertical() {
+    final scrollingDelegate = _verticalScrollController.position as ScrollPositionWithSingleContext;
+    scrollingDelegate.goBallistic(_velocity);
+  }
+
+  BallisticScrollActivity? _horizontalBallisticActivity;
+  void _goBallisticHorizontal() {
+    print("GO BALLISTIC HORIZONTAL. VELOCITY: $_velocity");
+    // _horizontalBallisticActivity = BallisticScrollActivity(
+    //   this,
+    //   ClampingScrollSimulation(
+    //     position: _horizontalScrollOffset,
+    //     velocity: _velocity,
+    //   ),
+    //   this,
+    //   true,
+    // );
+  }
+
+  /// The direction in which the scroll view scrolls.
+  @override
+  AxisDirection get axisDirection => _velocity >= 0 ? AxisDirection.left : AxisDirection.right;
+
+  /// Update the scroll position to the given pixel value.
+  ///
+  /// Returns the overscroll, if any. See [ScrollPosition.setPixels] for more
+  /// information.
+  @override
+  double setPixels(double pixels) => _horizontalScrollOffset = pixels;
+
+  /// Updates the scroll position by the given amount.
+  ///
+  /// Appropriate for when the user is directly manipulating the scroll
+  /// position, for example by dragging the scroll view. Typically applies
+  /// [ScrollPhysics.applyPhysicsToUserOffset] and other transformations that
+  /// are appropriate for user-driving scrolling.
+  @override
+  void applyUserOffset(double delta) => _horizontalScrollOffset += delta;
+
+  /// Terminate the current activity and start an idle activity.
+  @override
+  void goIdle() {}
+
+  /// Terminate the current activity and start a ballistic activity with the
+  /// given velocity.
+  @override
+  void goBallistic(double velocity) {}
+
+  @override
+  Widget build(BuildContext context) {
+    if (_styledLines == null) {
+      return const SizedBox();
+    }
+
+    return Listener(
+      onPointerPanZoomUpdate: _onPanZoomUpdate,
+      onPointerPanZoomEnd: _onPanZoomEnd,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.text,
+        child: SingleChildScrollView(
+          controller: _verticalScrollController,
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < _styledLines!.length; i += 1)
+                ScrollingCodeLine(
+                  lineNumber: i,
+                  indentLineColor: const Color(0xFF333333),
+                  baseTextStyle: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: "SourceCodePro",
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  scrollOffset: _horizontalScrollOffset,
+                  code: _styledLines![i],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const _code = r'''
 import 'package:example/ide/theme.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -505,3 +716,4 @@ class CodePosition implements Comparable<CodePosition> {
   @override
   String toString() => "(line: $line, offset: $characterOffset)";
 }
+''';

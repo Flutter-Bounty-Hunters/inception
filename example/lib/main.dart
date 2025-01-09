@@ -6,8 +6,11 @@ import 'package:flutter/material.dart';
 
 void main() {
   runApp(
-    const MaterialApp(
-      home: _Screen(),
+    MaterialApp(
+      theme: ThemeData(
+        brightness: Brightness.dark,
+      ),
+      home: const _Screen(),
     ),
   );
 }
