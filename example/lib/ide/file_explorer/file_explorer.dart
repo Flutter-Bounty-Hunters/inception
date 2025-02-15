@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:example/ide/ide.dart';
-import 'package:example/ide/infrastructure/user_settings.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -43,7 +42,7 @@ class FileExplorer extends StatefulWidget {
   final Directory directory;
   final LspClient lspClient;
 
-  final void Function(File) onFileOpenRequested;
+  final void Function(File file, OpenFileMode mode) onFileOpenRequested;
 
   @override
   State<FileExplorer> createState() => _FileExplorerState();
@@ -305,7 +304,7 @@ class _FileExplorerState extends State<FileExplorer> {
 
           if (node.isFile) {
             // Open document.
-            widget.onFileOpenRequested(node.asFile);
+            widget.onFileOpenRequested(node.asFile, OpenFileMode.replaceCurrentTab);
           }
         },
       ),
@@ -326,7 +325,7 @@ class _FileExplorerState extends State<FileExplorer> {
           });
 
           // Open document.
-          widget.onFileOpenRequested(node.asFile);
+          widget.onFileOpenRequested(node.asFile, OpenFileMode.newTab);
         },
       ),
     };
@@ -365,4 +364,13 @@ class _ClampedScrolling extends ScrollBehavior {
   ScrollPhysics getScrollPhysics(BuildContext context) {
     return const ClampingScrollPhysics();
   }
+}
+
+/// The way that the file should be opened.
+enum OpenFileMode {
+  /// Replace the current tab with the new file.
+  replaceCurrentTab,
+
+  /// Open the file in a new tab.
+  newTab,
 }
