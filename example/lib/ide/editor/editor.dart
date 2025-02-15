@@ -1,21 +1,19 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:example/ide/editor/code_layout.dart';
 import 'package:example/ide/editor/syntax_highlighting.dart';
+import 'package:example/ide/ide_controller.dart';
 import 'package:example/ide/infrastructure/keyboard_shortcuts.dart';
 import 'package:example/ide/infrastructure/popover_list.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
-import 'package:example/lsp_exploration/lsp/messages/go_to_definition.dart';
 import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:follow_the_leader/follow_the_leader.dart';
-import 'package:path/path.dart' as path;
 import 'package:super_editor/super_editor.dart';
 import 'package:super_editor_markdown/super_editor_markdown.dart';
 import 'package:syntax_highlight/syntax_highlight.dart';
@@ -29,14 +27,18 @@ class IdeEditor extends StatefulWidget {
   });
 
   final LspClient lspClient;
-  final File? sourceFile;
+  final IdeFile sourceFile;
   final void Function(String uri, Range range)? onGoToDefinition;
 
   @override
   State<IdeEditor> createState() => _IdeEditorState();
 }
 
-class _IdeEditorState extends State<IdeEditor> {
+class _IdeEditorState extends State<IdeEditor> with AutomaticKeepAliveClientMixin {
+  /// Keeps the state when changing between tabs.
+  @override
+  bool get wantKeepAlive => true;
+
   final _linesKey = GlobalKey();
   late FollowerBoundary _screenBoundary;
 
@@ -67,8 +69,6 @@ class _IdeEditorState extends State<IdeEditor> {
 
   final _focusNode = FocusNode();
 
-  final _fileContent = ValueNotifier<String>("");
-
   var _styledLines = <TextSpan>[];
 
   Position? _currentSelectedPosition;
@@ -77,12 +77,7 @@ class _IdeEditorState extends State<IdeEditor> {
   void initState() {
     super.initState();
 
-    if (widget.sourceFile != null) {
-      _fileContent.value = widget.sourceFile!.readAsStringSync();
-    }
     _initializeSyntaxHighlighting();
-
-    _fileContent.addListener(_onFileContentChange);
   }
 
   @override
@@ -98,16 +93,14 @@ class _IdeEditorState extends State<IdeEditor> {
   @override
   void didUpdateWidget(IdeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    if (widget.sourceFile != oldWidget.sourceFile) {
-      _fileContent.value = widget.sourceFile!.readAsStringSync();
+    if (oldWidget.sourceFile != widget.sourceFile) {
+      _highlightSyntax();
     }
   }
 
   @override
   void dispose() {
     _hoverTimer?.cancel();
-    _fileContent.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -121,21 +114,23 @@ class _IdeEditorState extends State<IdeEditor> {
       language: 'dart',
       theme: theme,
     );
-  }
 
-  void _onFileContentChange() {
+    if (!mounted) {
+      return;
+    }
+
     _highlightSyntax();
   }
 
   void _highlightSyntax() {
     setState(() {
-      _styledLines = highlightSyntaxByLine(_highlighter!, _fileContent.value);
+      _styledLines = highlightSyntaxByLine(_highlighter!, widget.sourceFile.content);
 
-      print("Displaying ${_styledLines.length} styled lines");
+      // print("Displaying ${_styledLines.length} styled lines");
       for (final span in _styledLines) {
         final buffer = StringBuffer();
         span.computeToPlainText(buffer);
-        print("Line: '${buffer.toString()}'");
+        // print("Line: '${buffer.toString()}'");
       }
     });
   }
@@ -151,22 +146,14 @@ class _IdeEditorState extends State<IdeEditor> {
     }
 
     final sourceFile = widget.sourceFile;
-    if (sourceFile == null) {
-      return;
-    }
-
     if (_shouldAbortCurrentHoverRequest(position)) {
       return;
     }
 
-    final filePath = sourceFile.isAbsolute //
-        ? sourceFile.path
-        : path.absolute(sourceFile.path);
-
     final res = await widget.lspClient.hover(
       HoverParams(
         textDocument: TextDocumentIdentifier(
-          uri: "file://$filePath",
+          uri: sourceFile.uri,
         ),
         position: Position(
           line: position.line,
@@ -208,13 +195,7 @@ class _IdeEditorState extends State<IdeEditor> {
       return;
     }
 
-    final openedFile = widget.sourceFile;
-    if (openedFile == null) {
-      _hoverOverlayController.hide();
-      return;
-    }
-
-    if (_fileContent.value.isEmpty) {
+    if (widget.sourceFile.content.isEmpty) {
       _hoverOverlayController.hide();
       return;
     }
@@ -253,11 +234,6 @@ class _IdeEditorState extends State<IdeEditor> {
       return true;
     }
 
-    if (widget.sourceFile == null) {
-      // There isn't any opened file to hover on.
-      return true;
-    }
-
     if (hoveredCodePosition != _latestHoveredCodePosition) {
       // The user hovered another position while the hover request was happening. Ignore the results,
       // because a new request will happen.
@@ -283,11 +259,6 @@ class _IdeEditorState extends State<IdeEditor> {
 
     if (_hoverOverlayController.isShowing) {
       _hoverOverlayController.hide();
-    }
-
-    final sourceFile = widget.sourceFile;
-    if (sourceFile == null) {
-      return;
     }
 
     final codeLines = _linesKey.asCodeLines;
@@ -333,23 +304,14 @@ class _IdeEditorState extends State<IdeEditor> {
       _hoverOverlayController.hide();
     }
 
-    final sourceFile = widget.sourceFile;
-    if (sourceFile == null) {
-      return;
-    }
-
     final position = _currentSelectedPosition;
     if (position == null) {
       return;
     }
 
-    final filePath = sourceFile.isAbsolute //
-        ? sourceFile.path
-        : path.absolute(sourceFile.path);
-
     final res = await widget.lspClient.codeAction(
       CodeActionsParams(
-        textDocument: TextDocumentIdentifier(uri: 'file://$filePath'),
+        textDocument: TextDocumentIdentifier(uri: widget.sourceFile.uri),
         range: Range(start: position, end: position),
         context: const CodeActionContext(
           triggerKind: CodeActionTriggerKind.invoked,
@@ -374,6 +336,7 @@ class _IdeEditorState extends State<IdeEditor> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Actions(
       actions: {
         IncreaseFontSizeIntent: CallbackAction<IncreaseFontSizeIntent>(

@@ -8,11 +8,9 @@ class ProblemsPanel extends StatefulWidget {
   const ProblemsPanel({
     super.key,
     required this.lspClient,
-    this.sourceFile,
   });
 
   final LspClient lspClient;
-  final File? sourceFile;
 
   @override
   State<ProblemsPanel> createState() => _ProblemsPanelState();
@@ -60,16 +58,11 @@ class _ProblemsPanelState extends State<ProblemsPanel> {
       return const SizedBox();
     }
 
-    // The LspClient will send problem notifications for all types of files.
-    // We only want to display them for the currently selected file.
-    if (_uri == null || widget.sourceFile == null) {
-      return const SizedBox();
-    }
-    final sameFile = _uri!.endsWith(widget.sourceFile!.path);
-    if (!sameFile) {
+    if (_uri == null) {
       return const SizedBox();
     }
 
+    // TODO: show a tree with all the diagnostics grouped by file.
     return ListView.builder(
       itemCount: _diagnostics!.length,
       itemBuilder: (context, index) {

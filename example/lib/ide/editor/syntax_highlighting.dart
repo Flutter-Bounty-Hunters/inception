@@ -23,12 +23,12 @@ List<TextSpan> _breakUpTextSpanTreeIntoLines(
   styledLines.add(currentLine);
   int currentOffset = 0;
 
-  print("----------- PROCESSING SPANS ------------");
+  // print("----------- PROCESSING SPANS ------------");
   while (spanStack.isNotEmpty) {
-    print("----------------");
+    // print("----------------");
     final span = spanStack.removeAt(0);
-    print("Span:\n'${span.text}'");
-    print("-----");
+    // print("Span:\n'${span.text}'");
+    // print("-----");
 
     if (span.children != null) {
       // Push the children of this span onto the span stack so that they'll be
@@ -38,7 +38,7 @@ List<TextSpan> _breakUpTextSpanTreeIntoLines(
 
     if (span.text == null) {
       // There's no text in this span. Move on to the children, or later spans.
-      print("The span has no text. Moving to next span.");
+      // print("The span has no text. Moving to next span.");
       continue;
     }
 
@@ -46,11 +46,11 @@ List<TextSpan> _breakUpTextSpanTreeIntoLines(
     debugBuffer.writeln();
 
     final endOfSpan = currentOffset + span.text!.length;
-    print("Start of this span: $currentOffset");
-    print("End of this span: $endOfSpan");
+    // print("Start of this span: $currentOffset");
+    // print("End of this span: $endOfSpan");
 
     if (!span.text!.contains("\n")) {
-      print("This span has no newlines, appending to ongoing line.");
+      // print("This span has no newlines, appending to ongoing line.");
       // All the content in this span belongs to the current line. Append it.
       currentLine.children!.add(span);
       // print(
@@ -60,7 +60,7 @@ List<TextSpan> _breakUpTextSpanTreeIntoLines(
       continue;
     }
 
-    print("This span contains multiple lines of text...");
+    // print("This span contains multiple lines of text...");
     final lines = span.text!.split("\n");
     for (int i = 0; i < lines.length; i += 1) {
       final line = lines[i];
@@ -75,10 +75,10 @@ List<TextSpan> _breakUpTextSpanTreeIntoLines(
         // Write the current line to debug output for verification.
         final buffer = StringBuffer();
         currentLine.computeToPlainText(buffer);
-        print("COMMITTING LINE: '${buffer.toString()}'");
+        // print("COMMITTING LINE: '${buffer.toString()}'");
 
         // Create a new line to append remaining text.
-        print("STARTING NEW (BLANK) CODE LINE");
+        // print("STARTING NEW (BLANK) CODE LINE");
         currentLine = TextSpan(text: "", children: []);
         styledLines.add(currentLine);
       }

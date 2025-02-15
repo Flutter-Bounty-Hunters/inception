@@ -49,6 +49,8 @@ void main() {
       'Wrap with StreamBuilder',
       'Wrap with Center',
       'Wrap with Container',
+      'Wrap with Expanded',
+      'Wrap with Flexible',
       'Wrap with Padding',
       'Wrap with SizedBox',
       'Wrap with Column',

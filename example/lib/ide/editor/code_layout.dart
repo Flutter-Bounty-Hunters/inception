@@ -37,6 +37,15 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   final _lineKeys = <int, GlobalKey>{};
 
   @override
+  void didUpdateWidget(covariant CodeLines oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.codeLines.length != oldWidget.codeLines.length) {
+      _lineKeys.clear();
+    }
+  }
+
+  @override
   CodeRange? findWordBoundaryAtGlobalOffset(Offset globalOffset) {
     final line = _findLineLayoutAtGlobalOffset(globalOffset);
     if (line == null) {
