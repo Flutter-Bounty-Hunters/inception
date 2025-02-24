@@ -3,9 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-/// Provides the IDE functionallity, like opening and editing files.
+/// Provides the functionality to open and close files in the IDE.
 ///
-/// Holds the list of open editors and the active editor.
+/// A file can be opened in the active editor (the editor that is currently visible to the user)
+/// or in a new editor.
 class IdeController {
   /// The list of open editors and the active editor index.
   ///
@@ -31,40 +32,20 @@ class IdeController {
   /// If there is no active editor, opens a new editor.
   ///
   /// If the file is already open in another editor, shows the existing editor.
-  Future<void> openFileAtActiveEditor(String fileUri) async {
-    if (showExistingEditorForFile(fileUri)) {
-      // The file is already open in another editor. Fizzle.
-      return;
+  Future<void> openFile(String fileUri, OpenFileMode mode) async {
+    if (mode == OpenFileMode.replaceCurrentTab) {
+      await _openFileAtActiveEditor(fileUri);
+    } else {
+      await _openFileAtNewTab(fileUri);
     }
-
-    await _loadFile(fileUri);
-
-    final activeEditorIndex = _editorData.value.activeEditorIndex;
-    if (activeEditorIndex != null) {
-      // There is an open editor. Close it.
-      closeEditorAtIndex(activeEditorIndex);
-    }
-
-    await _openFile(fileUri, activeEditorIndex ?? 0);
   }
 
-  /// Opens the file with the given URI at a new editor.
+  /// Makes the existing editor for the file with the given URI the active editor, if any.
   ///
-  /// If the file is already open in another editor, shows the existing editor.
-  Future<void> openFileAtNewTab(String fileUri) async {
-    if (showExistingEditorForFile(fileUri)) {
-      return;
-    }
-
-    await _loadFile(fileUri);
-
-    await _openFile(fileUri, _editorData.value.openEditors.length);
-  }
-
-  /// Shows the existing editor for the file with the given URI, if any.
+  /// The active editor is the editor that is currently visible to the user.
   ///
   /// Returns `true` if there is an existing editor for the file and `false` otherwise.
-  bool showExistingEditorForFile(String fileUri) {
+  bool makeExistingEditorForFileActive(String fileUri) {
     final editorList = _fileUriToOpenedEditors[fileUri];
     if (editorList == null || editorList.isEmpty) {
       return false;
@@ -126,6 +107,41 @@ class IdeController {
   /// Returns the file with the given URI, if it's opened in the IDE.
   IdeFile? getFile(String fileUri) {
     return _fileUriToIdeFile[fileUri];
+  }
+
+  /// Opens the file with the given URI at the active editor.
+  ///
+  /// If there is no active editor, opens a new editor.
+  ///
+  /// If the file is already open in another editor, shows the existing editor.
+  Future<void> _openFileAtActiveEditor(String fileUri) async {
+    if (makeExistingEditorForFileActive(fileUri)) {
+      // The file is already open in another editor. Fizzle.
+      return;
+    }
+
+    await _loadFile(fileUri);
+
+    final activeEditorIndex = _editorData.value.activeEditorIndex;
+    if (activeEditorIndex != null) {
+      // There is an open editor. Close it.
+      closeEditorAtIndex(activeEditorIndex);
+    }
+
+    await _openFile(fileUri, activeEditorIndex ?? 0);
+  }
+
+  /// Opens the file with the given URI at a new editor.
+  ///
+  /// If the file is already open in another editor, shows the existing editor.
+  Future<void> _openFileAtNewTab(String fileUri) async {
+    if (makeExistingEditorForFileActive(fileUri)) {
+      return;
+    }
+
+    await _loadFile(fileUri);
+
+    await _openFile(fileUri, _editorData.value.openEditors.length);
   }
 
   /// Opens an editor for the file with the given URI at the given editor index, and
@@ -220,4 +236,13 @@ class IdeFileEditor {
   });
 
   final String fileUri;
+}
+
+/// The way that the file should be opened.
+enum OpenFileMode {
+  /// Replace the current tab with the new file.
+  replaceCurrentTab,
+
+  /// Open the file in a new tab.
+  newTab,
 }

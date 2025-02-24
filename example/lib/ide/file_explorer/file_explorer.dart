@@ -35,14 +35,16 @@ class FileExplorer extends StatefulWidget {
   const FileExplorer({
     super.key,
     required this.directory,
-    required this.onFileOpenRequested,
+    required this.onFileTap,
+    required this.onFileDoubleTap,
     required this.lspClient,
   });
 
   final Directory directory;
   final LspClient lspClient;
 
-  final void Function(File file, OpenFileMode mode) onFileOpenRequested;
+  final void Function(File file) onFileTap;
+  final void Function(File file) onFileDoubleTap;
 
   @override
   State<FileExplorer> createState() => _FileExplorerState();
@@ -304,7 +306,7 @@ class _FileExplorerState extends State<FileExplorer> {
 
           if (node.isFile) {
             // Open document.
-            widget.onFileOpenRequested(node.asFile, OpenFileMode.replaceCurrentTab);
+            widget.onFileTap(node.asFile);
           }
         },
       ),
@@ -325,7 +327,7 @@ class _FileExplorerState extends State<FileExplorer> {
           });
 
           // Open document.
-          widget.onFileOpenRequested(node.asFile, OpenFileMode.newTab);
+          widget.onFileDoubleTap(node.asFile);
         },
       ),
     };
@@ -364,13 +366,4 @@ class _ClampedScrolling extends ScrollBehavior {
   ScrollPhysics getScrollPhysics(BuildContext context) {
     return const ClampingScrollPhysics();
   }
-}
-
-/// The way that the file should be opened.
-enum OpenFileMode {
-  /// Replace the current tab with the new file.
-  replaceCurrentTab,
-
-  /// Open the file in a new tab.
-  newTab,
 }

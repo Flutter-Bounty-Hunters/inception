@@ -483,7 +483,31 @@ class _ContentAreaState extends State<ContentArea> with TickerProviderStateMixin
   }
 
   void _onGoToDefinition(String uri, Range range) {
-    widget.ideController.openFileAtNewTab(uri);
+    widget.ideController.openFile(uri, OpenFileMode.newTab);
+  }
+
+  Future<void> _openFile(File file, OpenFileMode mode) async {
+    String languageId = "dart";
+    if (file.path.endsWith(".md")) {
+      languageId = "markdown";
+    } else if (file.path.endsWith(".yaml")) {
+      languageId = "yaml";
+    }
+
+    await widget.workspace.lspClient.didOpenTextDocument(
+      DidOpenTextDocumentParams(
+        textDocument: TextDocumentItem(
+          uri: "file://${file.absolute.path}",
+          languageId: languageId,
+          version: 1,
+          text: file.readAsStringSync(),
+        ),
+      ),
+    );
+
+    widget.ideController.openFile(file.uri.toString(), mode);
+
+    widget.onFileOpen(file.path);
   }
 
   // When sufficient space:
@@ -509,34 +533,8 @@ class _ContentAreaState extends State<ContentArea> with TickerProviderStateMixin
             child: FileExplorer(
               lspClient: widget.workspace.lspClient,
               directory: widget.workspace.directory,
-              onFileOpenRequested: (file, mode) async {
-                String languageId = "dart";
-                if (file.path.endsWith(".md")) {
-                  languageId = "markdown";
-                } else if (file.path.endsWith(".yaml")) {
-                  languageId = "yaml";
-                }
-
-                await widget.workspace.lspClient.didOpenTextDocument(
-                  DidOpenTextDocumentParams(
-                    textDocument: TextDocumentItem(
-                      uri: "file://${file.absolute.path}",
-                      languageId: languageId,
-                      version: 1,
-                      text: file.readAsStringSync(),
-                    ),
-                  ),
-                );
-
-                // Open as the first editor.
-                if (mode == OpenFileMode.replaceCurrentTab) {
-                  widget.ideController.openFileAtActiveEditor(file.uri.toString());
-                } else {
-                  widget.ideController.openFileAtNewTab(file.uri.toString());
-                }
-
-                widget.onFileOpen(file.path);
-              },
+              onFileTap: (file) => _openFile(file, OpenFileMode.replaceCurrentTab),
+              onFileDoubleTap: (file) => _openFile(file, OpenFileMode.newTab),
             ),
           ),
         Expanded(

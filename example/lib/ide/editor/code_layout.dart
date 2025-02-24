@@ -34,14 +34,31 @@ class CodeLines extends StatefulWidget {
 }
 
 class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
-  final _lineKeys = <int, GlobalKey>{};
+  final _lineKeys = <GlobalKey>[];
+
+  @override
+  void initState() {
+    super.initState();
+
+    for (int i = 0; i < widget.codeLines.length; i++) {
+      _lineKeys.add(GlobalKey(debugLabel: "Code line: $i"));
+    }
+  }
 
   @override
   void didUpdateWidget(covariant CodeLines oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (widget.codeLines.length != oldWidget.codeLines.length) {
-      _lineKeys.clear();
+    // Update the line keys to match the new code lines length, if needed.
+    if (widget.codeLines.length > oldWidget.codeLines.length) {
+      // Add more lines until we reach the new code lines length.
+      while (_lineKeys.length < widget.codeLines.length) {
+        final lineIndex = _lineKeys.length;
+        _lineKeys.add(GlobalKey(debugLabel: "Code line: $lineIndex"));
+      }
+    } else if (widget.codeLines.length < oldWidget.codeLines.length) {
+      // Remove the exceding lines.
+      _lineKeys.removeRange(widget.codeLines.length, oldWidget.codeLines.length);
     }
   }
 
@@ -63,8 +80,8 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
 
   @override
   CodePosition findCodePositionNearestGlobalOffset(Offset globalOffset) {
-    for (int lineIndex in _lineKeys.keys) {
-      final lineLayout = _lineKeys[lineIndex]!.asCodeLine;
+    for (final lineKey in _lineKeys) {
+      final lineLayout = lineKey.asCodeLine;
       if (!lineLayout.containsGlobalYValue(globalOffset.dy)) {
         continue;
       }
@@ -86,7 +103,7 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
     final boxes = <TextBox>[];
 
     // Add the boxes for the first selected line, which may start at the middle of the line.
-    final firstCodeLine = _lineKeys[codeRange.start.line]!.asCodeLine;
+    final firstCodeLine = _lineKeys[codeRange.start.line].asCodeLine;
     final firstCodeLineBoxes = firstCodeLine.getBoxesForSelection(
       TextSelection(
         baseOffset: codeRange.start.characterOffset,
@@ -99,7 +116,7 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
 
     // Add the boxes for the lines between the first and the last, which are fully selected.
     for (int lineIndex = codeRange.start.line + 1; lineIndex < codeRange.end.line - 1; lineIndex += 1) {
-      final codeLine = _lineKeys[lineIndex]!.asCodeLine;
+      final codeLine = _lineKeys[lineIndex].asCodeLine;
       final codeLineBoxes = codeLine.getBoxesForSelection(
         TextSelection(
           baseOffset: 0,
@@ -111,7 +128,7 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
 
     // Add the boxes for the last selected line, which may end at the middle of the line.
     if (codeRange.start.line != codeRange.end.line) {
-      final lastCodeLine = _lineKeys[codeRange.end.line]!.asCodeLine;
+      final lastCodeLine = _lineKeys[codeRange.end.line].asCodeLine;
       final lastCodeLineBoxes = lastCodeLine.getBoxesForSelection(
         TextSelection(
           baseOffset: 0,
@@ -126,7 +143,7 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
 
   List<TextBox> _mapCodeLineTextBoxesToLayoutTextBoxes(int lineIndex, List<TextBox> boxes) {
     final layoutRenderBox = context.findRenderObject() as RenderBox;
-    final codeLineRenderBox = _lineKeys[lineIndex]!.currentContext!.findRenderObject() as RenderBox;
+    final codeLineRenderBox = _lineKeys[lineIndex].currentContext!.findRenderObject() as RenderBox;
 
     return boxes.map(
       (textBox) {
@@ -158,13 +175,13 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
       return _lineKeys[0]!.asCodeLine;
     }
     if (globalOffset.dy > linesTopLeft.dy + linesBox.size.height) {
-      return _lineKeys[_lineKeys.length]!.asCodeLine;
+      return _lineKeys[_lineKeys.length].asCodeLine;
     }
 
     // The offset is somewhere within the lines. Find the line that
     // contains the offset.
-    for (int lineIndex in _lineKeys.keys) {
-      final lineLayout = _lineKeys[lineIndex]!.asCodeLine;
+    for (final lineKey in _lineKeys) {
+      final lineLayout = lineKey.asCodeLine;
       if (!lineLayout.containsGlobalYValue(globalOffset.dy)) {
         continue;
       }
@@ -176,8 +193,8 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   }
 
   CodeLineLayout? _findLineLayoutAtGlobalOffset(Offset globalOffset) {
-    for (int lineIndex in _lineKeys.keys) {
-      final lineLayout = _lineKeys[lineIndex]!.asCodeLine;
+    for (final lineKey in _lineKeys) {
+      final lineLayout = lineKey.asCodeLine;
       if (!lineLayout.containsGlobalYValue(globalOffset.dy)) {
         continue;
       }
@@ -227,7 +244,6 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   }
 
   Widget _buildCodeLine(int lineIndex) {
-    _lineKeys[lineIndex] ??= GlobalKey(debugLabel: "Code line: $lineIndex");
     final key = _lineKeys[lineIndex];
 
     return CodeLine(
