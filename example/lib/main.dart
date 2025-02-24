@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:example/ide/ide.dart';
+import 'package:example/ide/ide_controller.dart';
 import 'package:example/ide/infrastructure/user_settings.dart';
 import 'package:example/ide/workspace.dart';
 import 'package:file_picker/file_picker.dart';
@@ -33,6 +34,7 @@ class _Screen extends StatefulWidget {
 
 class _ScreenState extends State<_Screen> {
   late final Workspace _workspace;
+  final IdeController _ideController = IdeController();
 
   final setupNotifier = ValueNotifier(SetupState.start);
 
@@ -74,6 +76,7 @@ class _ScreenState extends State<_Screen> {
           case SetupState.showIde:
             return IDE(
               workspace: _workspace,
+              controller: _ideController,
             );
         }
       },

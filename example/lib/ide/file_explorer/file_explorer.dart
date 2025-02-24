@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:example/ide/ide.dart';
-import 'package:example/ide/infrastructure/user_settings.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -36,14 +35,16 @@ class FileExplorer extends StatefulWidget {
   const FileExplorer({
     super.key,
     required this.directory,
-    required this.onFileOpenRequested,
+    required this.onFileTap,
+    required this.onFileDoubleTap,
     required this.lspClient,
   });
 
   final Directory directory;
   final LspClient lspClient;
 
-  final void Function(File) onFileOpenRequested;
+  final void Function(File file) onFileTap;
+  final void Function(File file) onFileDoubleTap;
 
   @override
   State<FileExplorer> createState() => _FileExplorerState();
@@ -305,7 +306,7 @@ class _FileExplorerState extends State<FileExplorer> {
 
           if (node.isFile) {
             // Open document.
-            widget.onFileOpenRequested(node.asFile);
+            widget.onFileTap(node.asFile);
           }
         },
       ),
@@ -326,7 +327,7 @@ class _FileExplorerState extends State<FileExplorer> {
           });
 
           // Open document.
-          widget.onFileOpenRequested(node.asFile);
+          widget.onFileDoubleTap(node.asFile);
         },
       ),
     };

@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:example/ide/editor/editor.dart';
 import 'package:example/ide/file_explorer/file_explorer.dart';
+import 'package:example/ide/ide_controller.dart';
 import 'package:example/ide/infrastructure/controls/toolbar_buttons.dart';
-import 'package:example/ide/infrastructure/user_settings.dart';
 import 'package:example/ide/problems_panel/problems_panel.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
@@ -11,7 +11,6 @@ import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
 import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
 import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
-import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -21,9 +20,11 @@ class IDE extends StatefulWidget {
   const IDE({
     super.key,
     required this.workspace,
+    required this.controller,
   });
 
   final Workspace workspace;
+  final IdeController controller;
 
   @override
   State<IDE> createState() => _IDEState();
@@ -111,6 +112,7 @@ class _IDEState extends State<IDE> {
                       const LeftBar(),
                       Expanded(
                         child: ContentArea(
+                          ideController: widget.controller,
                           workspace: widget.workspace,
                           showLeftPane: _showLeftPane,
                           showRightPane: true,
@@ -414,12 +416,14 @@ class _RenameFileDialogState extends State<RenameFileDialog> {
 class ContentArea extends StatefulWidget {
   const ContentArea({
     super.key,
+    required this.ideController,
     required this.workspace,
     required this.showLeftPane,
     required this.showRightPane,
     required this.onFileOpen,
   });
 
+  final IdeController ideController;
   final Workspace workspace;
 
   final bool showLeftPane;
@@ -430,18 +434,80 @@ class ContentArea extends StatefulWidget {
   State<ContentArea> createState() => _ContentAreaState();
 }
 
-class _ContentAreaState extends State<ContentArea> {
+class _ContentAreaState extends State<ContentArea> with TickerProviderStateMixin {
   // ignore: prefer_final_fields
   double _desiredLeftPaneWidth = 350;
 
   // ignore: prefer_final_fields
   double _desiredBottomPaneHeight = 200;
 
-  final _fileContent = ValueNotifier<String>("");
-  final _currentFile = ValueNotifier<File?>(null);
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 0, vsync: this);
+    widget.ideController.editorData.addListener(_onOpenEditorsChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant ContentArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.ideController.editorData != oldWidget.ideController.editorData) {
+      widget.ideController.editorData.removeListener(_onOpenEditorsChange);
+      widget.ideController.editorData.addListener(_onOpenEditorsChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    widget.ideController.editorData.removeListener(_onOpenEditorsChange);
+    super.dispose();
+  }
+
+  void _onOpenEditorsChange() {
+    // We cannot change the length of the TabController, so we create a new one
+    // and dispose the old one.
+    final oldTabController = _tabController;
+    final editorData = widget.ideController.editorData.value;
+    setState(() {
+      _tabController = TabController(
+        length: editorData.openEditors.length,
+        initialIndex: editorData.activeEditorIndex ?? 0,
+        animationDuration: Duration.zero,
+        vsync: this,
+      );
+      oldTabController.dispose();
+    });
+  }
 
   void _onGoToDefinition(String uri, Range range) {
-    _currentFile.value = File.fromUri(Uri.parse(uri));
+    widget.ideController.openFile(uri, OpenFileMode.newTab);
+  }
+
+  Future<void> _openFile(File file, OpenFileMode mode) async {
+    String languageId = "dart";
+    if (file.path.endsWith(".md")) {
+      languageId = "markdown";
+    } else if (file.path.endsWith(".yaml")) {
+      languageId = "yaml";
+    }
+
+    await widget.workspace.lspClient.didOpenTextDocument(
+      DidOpenTextDocumentParams(
+        textDocument: TextDocumentItem(
+          uri: "file://${file.absolute.path}",
+          languageId: languageId,
+          version: 1,
+          text: file.readAsStringSync(),
+        ),
+      ),
+    );
+
+    widget.ideController.openFile(file.uri.toString(), mode);
+
+    widget.onFileOpen(file.path);
   }
 
   // When sufficient space:
@@ -467,67 +533,86 @@ class _ContentAreaState extends State<ContentArea> {
             child: FileExplorer(
               lspClient: widget.workspace.lspClient,
               directory: widget.workspace.directory,
-              onFileOpenRequested: (file) async {
-                _fileContent.value = file.readAsStringSync();
-                _currentFile.value = file;
-
-                String languageId = "dart";
-                if (file.path.endsWith(".md")) {
-                  languageId = "markdown";
-                } else if (file.path.endsWith(".yaml")) {
-                  languageId = "yaml";
-                }
-
-                await widget.workspace.lspClient.didOpenTextDocument(
-                  DidOpenTextDocumentParams(
-                    textDocument: TextDocumentItem(
-                      uri: "file://${file.absolute.path}",
-                      languageId: languageId,
-                      version: 1,
-                      text: file.readAsStringSync(),
-                    ),
-                  ),
-                );
-
-                widget.onFileOpen(_currentFile.value!.path);
-              },
+              onFileTap: (file) => _openFile(file, OpenFileMode.replaceCurrentTab),
+              onFileDoubleTap: (file) => _openFile(file, OpenFileMode.newTab),
             ),
           ),
         Expanded(
-          child: ValueListenableBuilder(
-            valueListenable: _currentFile,
-            builder: (context, child, value) {
-              return Column(
-                children: [
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      height: double.infinity,
-                      color: panelLowColor,
-                      child: IdeEditor(
-                        lspClient: widget.workspace.lspClient,
-                        sourceFile: _currentFile.value,
-                        onGoToDefinition: _onGoToDefinition,
-                      ),
-                    ),
+          child: Column(
+            children: [
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  color: panelLowColor,
+                  child: _buildEditorsTab(),
+                ),
+              ),
+              Container(
+                height: _desiredBottomPaneHeight,
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: dividerColor),
                   ),
-                  Container(
-                    height: _desiredBottomPaneHeight,
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: dividerColor),
-                      ),
-                    ),
-                    child: ProblemsPanel(
-                      lspClient: widget.workspace.lspClient,
-                      sourceFile: _currentFile.value,
-                    ),
-                  ),
-                ],
-              );
-            },
+                ),
+                child: ProblemsPanel(
+                  lspClient: widget.workspace.lspClient,
+                ),
+              ),
+            ],
           ),
         ),
+      ],
+    );
+  }
+
+  /// Builds the tab bar and tab views for the open editors.
+  Widget _buildEditorsTab() {
+    final editors = widget.ideController.editorData.value.openEditors;
+
+    return Column(
+      mainAxisSize: MainAxisSize.max,
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabAlignment: TabAlignment.start,
+          isScrollable: true,
+          labelColor: Colors.white,
+          indicatorColor: Colors.white,
+          tabs: [
+            for (int i = 0; i < editors.length; i++)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 5,
+                children: [
+                  Text(
+                    path.basename(editors[i].fileUri),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      widget.ideController.closeEditorAtIndex(i);
+                    },
+                  ),
+                ],
+              ),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              for (final editor in editors)
+                IdeEditor(
+                  lspClient: widget.workspace.lspClient,
+                  sourceFile: widget.ideController.getFile(editor.fileUri)!,
+                  onGoToDefinition: _onGoToDefinition,
+                )
+            ],
+          ),
+        )
       ],
     );
   }
