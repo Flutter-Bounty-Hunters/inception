@@ -66,6 +66,9 @@ class LspTester {
           processId: pid,
           rootUri: 'file://$workspacePath',
           capabilities: LspClientCapabilities(),
+          initializationOptions: {
+            'outline': true,
+          },
         ),
       );
 

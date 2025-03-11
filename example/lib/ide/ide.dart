@@ -5,6 +5,7 @@ import 'package:example/ide/file_explorer/file_explorer.dart';
 import 'package:example/ide/infrastructure/controls/toolbar_buttons.dart';
 import 'package:example/ide/infrastructure/user_settings.dart';
 import 'package:example/ide/problems_panel/problems_panel.dart';
+import 'package:example/ide/testing/test_panel.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
 import 'package:example/lsp_exploration/lsp/lsp_client.dart';
@@ -33,6 +34,7 @@ class _IDEState extends State<IDE> {
   // ignore: prefer_final_fields
   bool _showLeftPane = true;
   bool _isAnalyzing = false;
+  LeftPaneContent _leftPaneContent = LeftPaneContent.fileExplorer;
 
   String? currentFile;
 
@@ -56,10 +58,12 @@ class _IDEState extends State<IDE> {
 
     await widget.workspace.lspClient.initialize(
       InitializeParams(
-        processId: pid,
-        rootUri: 'file://${widget.workspace.directory.absolute.path}',
-        capabilities: LspClientCapabilities(),
-      ),
+          processId: pid,
+          rootUri: 'file://${widget.workspace.directory.absolute.path}',
+          capabilities: LspClientCapabilities(),
+          initializationOptions: {
+            'outline': true,
+          }),
     );
 
     await widget.workspace.lspClient.initialized();
@@ -77,8 +81,6 @@ class _IDEState extends State<IDE> {
 
   void _lspNotificationListener(LspNotification notification) {
     final method = notification.method;
-
-    print("Received notification: $method");
 
     if (method != r"$/analyzerStatus") {
       return;
@@ -108,11 +110,19 @@ class _IDEState extends State<IDE> {
                 Expanded(
                   child: Row(
                     children: [
-                      const LeftBar(),
+                      LeftBar(
+                        onFileExplorerPressed: () => setState(() {
+                          _leftPaneContent = LeftPaneContent.fileExplorer;
+                        }),
+                        onTestsPressed: () => setState(() {
+                          _leftPaneContent = LeftPaneContent.tests;
+                        }),
+                      ),
                       Expanded(
                         child: ContentArea(
                           workspace: widget.workspace,
                           showLeftPane: _showLeftPane,
+                          leftPaneContent: _leftPaneContent,
                           showRightPane: true,
                           onFileOpen: (value) {
                             setState(() {
@@ -153,7 +163,14 @@ class _IDEState extends State<IDE> {
 }
 
 class LeftBar extends StatelessWidget {
-  const LeftBar({super.key});
+  const LeftBar({
+    super.key,
+    required this.onFileExplorerPressed,
+    required this.onTestsPressed,
+  });
+
+  final VoidCallback onFileExplorerPressed;
+  final VoidCallback onTestsPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +188,7 @@ class LeftBar extends StatelessWidget {
             icon: Icons.folder_open,
             iconColor: Colors.white,
             iconSize: 20,
-            onPressed: () {},
+            onPressed: onFileExplorerPressed,
           ),
           TriStateIconButton(
             icon: Icons.commit,
@@ -184,6 +201,12 @@ class LeftBar extends StatelessWidget {
             iconColor: Colors.white,
             iconSize: 20,
             onPressed: () {},
+          ),
+          TriStateIconButton(
+            icon: Icons.science_outlined,
+            iconColor: Colors.white,
+            iconSize: 20,
+            onPressed: onTestsPressed,
           ),
           TriStateIconButton(
             icon: Icons.more_horiz,
@@ -416,6 +439,7 @@ class ContentArea extends StatefulWidget {
     super.key,
     required this.workspace,
     required this.showLeftPane,
+    this.leftPaneContent = LeftPaneContent.fileExplorer,
     required this.showRightPane,
     required this.onFileOpen,
   });
@@ -423,6 +447,7 @@ class ContentArea extends StatefulWidget {
   final Workspace workspace;
 
   final bool showLeftPane;
+  final LeftPaneContent leftPaneContent;
   final bool showRightPane;
   final Function(String documentUrl) onFileOpen;
 
@@ -464,34 +489,7 @@ class _ContentAreaState extends State<ContentArea> {
                 right: BorderSide(color: dividerColor),
               ),
             ),
-            child: FileExplorer(
-              lspClient: widget.workspace.lspClient,
-              directory: widget.workspace.directory,
-              onFileOpenRequested: (file) async {
-                _fileContent.value = file.readAsStringSync();
-                _currentFile.value = file;
-
-                String languageId = "dart";
-                if (file.path.endsWith(".md")) {
-                  languageId = "markdown";
-                } else if (file.path.endsWith(".yaml")) {
-                  languageId = "yaml";
-                }
-
-                await widget.workspace.lspClient.didOpenTextDocument(
-                  DidOpenTextDocumentParams(
-                    textDocument: TextDocumentItem(
-                      uri: "file://${file.absolute.path}",
-                      languageId: languageId,
-                      version: 1,
-                      text: file.readAsStringSync(),
-                    ),
-                  ),
-                );
-
-                widget.onFileOpen(_currentFile.value!.path);
-              },
-            ),
+            child: _buildLeftPaneContent(),
           ),
         Expanded(
           child: ValueListenableBuilder(
@@ -531,4 +529,53 @@ class _ContentAreaState extends State<ContentArea> {
       ],
     );
   }
+
+  Widget _buildLeftPaneContent() {
+    return switch (widget.leftPaneContent) {
+      LeftPaneContent.fileExplorer => _buildFileExplorer(),
+      LeftPaneContent.tests => _buildTestPanel(),
+    };
+  }
+
+  Widget _buildFileExplorer() {
+    return FileExplorer(
+      lspClient: widget.workspace.lspClient,
+      directory: widget.workspace.directory,
+      onFileOpenRequested: (file) async {
+        _fileContent.value = file.readAsStringSync();
+        _currentFile.value = file;
+
+        String languageId = "dart";
+        if (file.path.endsWith(".md")) {
+          languageId = "markdown";
+        } else if (file.path.endsWith(".yaml")) {
+          languageId = "yaml";
+        }
+
+        await widget.workspace.lspClient.didOpenTextDocument(
+          DidOpenTextDocumentParams(
+            textDocument: TextDocumentItem(
+              uri: "file://${file.absolute.path}",
+              languageId: languageId,
+              version: 1,
+              text: file.readAsStringSync(),
+            ),
+          ),
+        );
+
+        widget.onFileOpen(_currentFile.value!.path);
+      },
+    );
+  }
+
+  Widget _buildTestPanel() {
+    return TestPanel(
+      workspace: widget.workspace,
+    );
+  }
+}
+
+enum LeftPaneContent {
+  fileExplorer,
+  tests,
 }

@@ -102,6 +102,13 @@ class LspClient with ChangeNotifier {
     );
   }
 
+  Future<void> didCloseTextDocument(DidCloseTextDocumentParams params) async {
+    await _lspClientCommunication!.sendNotification(
+      'textDocument/didClose',
+      params.toJson(),
+    );
+  }
+
   Future<Hover?> hover(HoverParams params) async {
     final data = await _lspClientCommunication!.sendRequest(
       'textDocument/hover',

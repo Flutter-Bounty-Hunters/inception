@@ -1,9 +1,23 @@
+import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
+
 class DidOpenTextDocumentParams {
   DidOpenTextDocumentParams({
     required this.textDocument,
   });
 
   final TextDocumentItem textDocument;
+
+  Map<String, dynamic> toJson() => {
+        'textDocument': textDocument.toJson(),
+      };
+}
+
+class DidCloseTextDocumentParams {
+  DidCloseTextDocumentParams({
+    required this.textDocument,
+  });
+
+  final TextDocumentIdentifier textDocument;
 
   Map<String, dynamic> toJson() => {
         'textDocument': textDocument.toJson(),
