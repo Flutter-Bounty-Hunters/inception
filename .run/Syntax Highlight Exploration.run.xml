@@ -1,6 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Syntax Highlight Exploration" type="FlutterRunConfigurationType" factoryName="Flutter">
-    <option name="filePath" value="$PROJECT_DIR$/example/lib/syntax_highlight_lib_exploration/main_syntax_highlight_lib_exploration.dart" />
-    <method v="2" />
-  </configuration>
-</component>

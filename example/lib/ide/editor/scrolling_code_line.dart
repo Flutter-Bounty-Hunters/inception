@@ -103,6 +103,12 @@ class _ScrollingCodeLineState extends State<ScrollingCodeLine> implements CodeLi
     return CodePosition(widget.lineNumber, textPosition.offset);
   }
 
+  @override
+  List<TextBox> getBoxesForSelection(TextSelection selection) {
+    // TODO:
+    return [];
+  }
+
   RenderParagraph get _renderParagraph => _codeTextKey.currentContext!.findRenderObject() as RenderParagraph;
 
   @override
@@ -135,7 +141,7 @@ class _ScrollingCodeLineState extends State<ScrollingCodeLine> implements CodeLi
               "${widget.lineNumber + 1}",
               textAlign: TextAlign.right,
               style: widget.baseTextStyle.copyWith(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
               ),
             ),
           ),

@@ -14,7 +14,10 @@ void main() {
         brightness: Brightness.dark,
       ),
       scrollBehavior: const MaterialScrollBehavior().copyWith(
-        dragDevices: PointerDeviceKind.values.toSet(),
+        dragDevices: {
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+        },
       ),
       home: const _Screen(),
     ),

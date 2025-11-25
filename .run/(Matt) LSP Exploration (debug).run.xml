@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="(Matt) LSP Exploration" type="FlutterRunConfigurationType" factoryName="Flutter">
+  <configuration default="false" name="(Matt) LSP Exploration (debug)" type="FlutterRunConfigurationType" factoryName="Flutter">
     <option name="additionalArgs" value="--dart-define CONTENT_DIRECTORY=&quot;$PROJECT_DIR$/../super_editor/super_editor&quot;" />
-    <option name="filePath" value="$PROJECT_DIR$/example/lib/main_lsp_exploration.dart" />
+    <option name="filePath" value="$PROJECT_DIR$/example/lib/main.dart" />
     <method v="2" />
   </configuration>
 </component>
