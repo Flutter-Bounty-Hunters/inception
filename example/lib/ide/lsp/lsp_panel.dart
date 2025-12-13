@@ -1,8 +1,7 @@
 import 'dart:io';
 
 import 'package:example/ide/workspace.dart';
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
-import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
+import 'package:inception/inception.dart';
 import 'package:flutter/material.dart';
 
 /// A panel that monitors a Dart LSP connection and provides

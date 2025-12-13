@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
-import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
-import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inception/inception.dart';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as path;
 
@@ -49,7 +47,14 @@ class LspTester {
   Future<void> initialize({
     required String workspacePath,
   }) async {
-    client = LspClient();
+    client = LspClient(
+      executable: 'dart',
+      params: [
+        'language-server', //
+        '--client-id', 'inception.plugin', //
+        '--client-version', '0.1'
+      ],
+    );
 
     // Start the LSP process.
     await client.start();

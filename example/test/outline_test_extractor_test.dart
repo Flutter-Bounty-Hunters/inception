@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:example/ide/lsp/outline.dart';
 import 'package:example/ide/testing/outline_test_extractor.dart';
 import 'package:example/ide/testing/test_node.dart';
 import 'package:path/path.dart' as path;
 
-import 'package:example/lsp_exploration/lsp/messages/outline.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

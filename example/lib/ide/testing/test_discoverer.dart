@@ -1,14 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:example/ide/lsp/outline.dart';
 import 'package:example/ide/testing/outline_test_extractor.dart';
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
-import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
-import 'package:example/lsp_exploration/lsp/messages/outline.dart';
+import 'package:inception/inception.dart';
 import 'package:path/path.dart' as path;
 
 import 'package:example/ide/testing/test_node.dart';
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 
 /// Discovers tests in the root path of the LSP client.
 ///

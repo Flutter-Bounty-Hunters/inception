@@ -2,25 +2,25 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
-import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
-import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
-import 'package:example/lsp_exploration/lsp/messages/go_to_definition.dart';
-import 'package:example/lsp_exploration/lsp/messages/hover.dart';
-import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
-import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
-import 'package:example/lsp_exploration/lsp/messages/semantic_tokens.dart';
-import 'package:example/lsp_exploration/lsp/messages/type_hierarchy.dart';
 import 'package:flutter/foundation.dart';
+import 'package:inception/inception.dart';
+import 'package:inception/src/lsp/messages/completion.dart';
+import 'package:inception/src/lsp/messages/did_open_text_document.dart';
+import 'package:inception/src/lsp/messages/hover.dart';
+import 'package:inception/src/lsp/messages/initialize.dart';
+import 'package:inception/src/lsp/messages/semantic_tokens.dart';
 import 'package:path/path.dart' as path;
 
 class LspClient with ChangeNotifier {
   LspClient({
     this.debug = false,
+    required this.executable,
+    this.params = const [],
   });
 
   final bool debug;
+  final String executable;
+  final List<String> params;
 
   LspJsonRpcClient? _lspClientCommunication;
 
@@ -43,7 +43,11 @@ class LspClient with ChangeNotifier {
     notifyListeners();
 
     // TODO: handle possible process creation failure.
-    _lspClientCommunication = LspJsonRpcClient();
+    _lspClientCommunication = LspJsonRpcClient(
+      executable: executable,
+      params: params,
+      debug: debug,
+    );
     await _lspClientCommunication!.start();
 
     _status = LspClientStatus.started;
@@ -56,10 +60,7 @@ class LspClient with ChangeNotifier {
 
     notifyListeners();
 
-    final data = await _lspClientCommunication!.sendRequest(
-      'initialize',
-      request.toJson(),
-    );
+    final data = await _lspClientCommunication!.sendRequest('initialize', request.toJson());
 
     if (data is! LspObject) {
       // TODO: clean up the client after the failure so that it can continue to
@@ -75,9 +76,7 @@ class LspClient with ChangeNotifier {
   }
 
   Future<void> initialized() async {
-    await _lspClientCommunication!.sendNotification(
-      'initialized',
-    );
+    await _lspClientCommunication!.sendNotification('initialized');
   }
 
   void stop() {
@@ -96,24 +95,15 @@ class LspClient with ChangeNotifier {
   }
 
   Future<void> didOpenTextDocument(DidOpenTextDocumentParams params) async {
-    await _lspClientCommunication!.sendNotification(
-      'textDocument/didOpen',
-      params.toJson(),
-    );
+    await _lspClientCommunication!.sendNotification('textDocument/didOpen', params.toJson());
   }
 
   Future<void> didCloseTextDocument(DidCloseTextDocumentParams params) async {
-    await _lspClientCommunication!.sendNotification(
-      'textDocument/didClose',
-      params.toJson(),
-    );
+    await _lspClientCommunication!.sendNotification('textDocument/didClose', params.toJson());
   }
 
   Future<Hover?> hover(HoverParams params) async {
-    final data = await _lspClientCommunication!.sendRequest(
-      'textDocument/hover',
-      params.toJson(),
-    );
+    final data = await _lspClientCommunication!.sendRequest('textDocument/hover', params.toJson());
 
     if (data is LspNull) {
       return null;
@@ -130,10 +120,7 @@ class LspClient with ChangeNotifier {
   }
 
   Future<List<Location>?> goToDefinition(DefinitionsParams params) async {
-    final data = await _lspClientCommunication!.sendRequest(
-      'textDocument/definition',
-      params.toJson(),
-    );
+    final data = await _lspClientCommunication!.sendRequest('textDocument/definition', params.toJson());
 
     if (data is LspNull) {
       return null;
@@ -151,13 +138,8 @@ class LspClient with ChangeNotifier {
     return data.value.map((json) => Location.fromJson(json)).toList();
   }
 
-  Future<List<DocumentSymbol>?> documentSymbols(
-    DocumentSymbolsParams params,
-  ) async {
-    final data = await _lspClientCommunication!.sendRequest(
-      'textDocument/documentSymbol',
-      params.toJson(),
-    );
+  Future<List<DocumentSymbol>?> documentSymbols(DocumentSymbolsParams params) async {
+    final data = await _lspClientCommunication!.sendRequest('textDocument/documentSymbol', params.toJson());
 
     if (data is LspNull) {
       return null;
@@ -167,16 +149,11 @@ class LspClient with ChangeNotifier {
       throw Exception('Unexpected response type: ${data.runtimeType}');
     }
 
-    return List<DocumentSymbol>.from(
-      data.value.map((json) => DocumentSymbol.fromJson(json)),
-    );
+    return List<DocumentSymbol>.from(data.value.map((json) => DocumentSymbol.fromJson(json)));
   }
 
   Future<SemanticTokens?> semanticTokens(SemanticTokensParams params) async {
-    final data = await _lspClientCommunication!.sendRequest(
-      'textDocument/semanticTokens/full',
-      params.toJson(),
-    );
+    final data = await _lspClientCommunication!.sendRequest('textDocument/semanticTokens/full', params.toJson());
 
     if (data is LspNull) {
       return null;
@@ -186,20 +163,12 @@ class LspClient with ChangeNotifier {
       throw Exception('Unexpected response type: ${data.runtimeType}');
     }
 
-    return SemanticTokens(
-      resultId: data.value['resultId'],
-      data: List<int>.from(data.value['data']),
-    );
+    return SemanticTokens(resultId: data.value['resultId'], data: List<int>.from(data.value['data']));
   }
 
   // TODO: Replace TextDocumentPositionParams with a TypeHierarchyPrepareParams
-  Future<List<TypeHierarchyItem>?> prepareTypeHierarchy(
-    PrepareTypeHierarchyParams params,
-  ) async {
-    final data = await _lspClientCommunication!.sendRequest(
-      'textDocument/prepareTypeHierarchy',
-      params.toJson(),
-    );
+  Future<List<TypeHierarchyItem>?> prepareTypeHierarchy(PrepareTypeHierarchyParams params) async {
+    final data = await _lspClientCommunication!.sendRequest('textDocument/prepareTypeHierarchy', params.toJson());
 
     if (data is LspNull) {
       return null;
@@ -215,10 +184,7 @@ class LspClient with ChangeNotifier {
   Future<Map<String, dynamic>?> willRenameFiles(RenameFilesParams params) async {
     final requestData = params.toJson();
 
-    final data = await _lspClientCommunication!.sendRequest(
-      'workspace/willRenameFiles',
-      requestData,
-    );
+    final data = await _lspClientCommunication!.sendRequest('workspace/willRenameFiles', requestData);
 
     if (data is LspNull) {
       return null;
@@ -234,10 +200,7 @@ class LspClient with ChangeNotifier {
   Future<List<LspCodeAction>?> codeAction(CodeActionsParams params) async {
     final requestData = params.toJson();
 
-    final data = await _lspClientCommunication!.sendRequest(
-      'textDocument/codeAction',
-      requestData,
-    );
+    final data = await _lspClientCommunication!.sendRequest('textDocument/codeAction', requestData);
 
     if (data is LspNull) {
       return null;
@@ -250,22 +213,39 @@ class LspClient with ChangeNotifier {
     return data.value.map((e) => LspCodeAction.fromJson(e)).toList();
   }
 
+  Future<List<CompletionItem>?> completion(CompletionParams params) async {
+    final requestData = params.toJson();
+
+    final data = await _lspClientCommunication!.sendRequest('textDocument/completion', requestData);
+
+    if (data is LspNull) {
+      return null;
+    }
+
+    if (data is! LspArray) {
+      throw Exception('Unexpected response type: ${data.runtimeType}');
+    }
+
+    return data.value.map((e) => CompletionItem.fromJson(e)).toList();
+  }
+
   Future<void> didRenameFiles(RenameFilesParams params) async {
     final requestData = params.toJson();
 
-    await _lspClientCommunication!.sendNotification(
-      'workspace/didRenameFiles',
-      requestData,
-    );
+    await _lspClientCommunication!.sendNotification('workspace/didRenameFiles', requestData);
   }
 }
 
 class LspJsonRpcClient {
   LspJsonRpcClient({
     this.debug = false,
+    required this.executable,
+    this.params = const [],
   });
 
   final bool debug;
+  final String executable;
+  final List<String> params;
 
   Process? _lspProcess;
   int _currentCommandId = 0;
@@ -292,11 +272,7 @@ class LspJsonRpcClient {
     _pendingResponses.clear();
     _didParseHeader = false;
 
-    final process = await Process.start('dart', [
-      'language-server', //
-      '--client-id', 'inception.plugin', //
-      '--client-version', '0.1'
-    ]);
+    final process = await Process.start(executable, params);
     process.stdout.listen(_onData);
     process.stderr.listen(_onError);
 
@@ -318,31 +294,24 @@ class LspJsonRpcClient {
     return completer.future;
   }
 
-  Future<void> sendNotification(
-    String method, [
-    Map<String, dynamic>? params,
-  ]) async {
+  Future<void> sendNotification(String method, [Map<String, dynamic>? params]) async {
     if (_lspProcess == null) {
       throw Exception('LSP process not started. Did you forget to call start?');
     }
 
-    _currentCommandId += 1;
+    //_currentCommandId += 1;
 
-    return _send(_currentCommandId, method, params ?? const {});
+    return _send(0, method, params ?? const {});
   }
 
   Future<void> stop() async {
     _lspProcess?.kill();
   }
 
-  Future<void> _send(
-    int messageId,
-    String method,
-    Map<String, dynamic> params,
-  ) async {
+  Future<void> _send(int messageId, String method, Map<String, dynamic> params) async {
     final request = {
       'jsonrpc': '2.0',
-      'id': messageId,
+      if (messageId > 0) 'id': messageId,
       'method': method,
       'params': params,
     };
@@ -421,15 +390,16 @@ class LspJsonRpcClient {
       return false;
     }
 
-    if (_contentType == null) {
-      // We don't have a content type yet.
-      return false;
-    }
+    // LUAU LSP does not report the content type.
+    // if (_contentType == null) {
+    //   // We don't have a content type yet.
+    //   return false;
+    // }
 
-    if (_contentType != 'application/vscode-jsonrpc; charset=utf-8') {
-      // The response is not in the expected format.
-      return false;
-    }
+    // if (_contentType != 'application/vscode-jsonrpc; charset=utf-8') {
+    //   // The response is not in the expected format.
+    //   return false;
+    // }
 
     final content = _buffer.substring(0, _contentLength);
 
@@ -528,37 +498,23 @@ LspAny jsonTypeToLspType(dynamic value) {
 }
 
 class LspResponseError {
-  LspResponseError({
-    required this.code,
-    required this.message,
-    this.data,
-  });
+  LspResponseError({required this.code, required this.message, this.data});
 
   final int code;
   final String message;
   final dynamic data;
 
   factory LspResponseError.fromJson(Map<String, dynamic> json) {
-    return LspResponseError(
-      code: json['code'] as int,
-      message: json['message'] as String,
-      data: json['data'],
-    );
+    return LspResponseError(code: json['code'] as int, message: json['message'] as String, data: json['data']);
   }
 }
 
 class LspNotification {
   static LspNotification fromJson(Map<String, dynamic> json) {
-    return LspNotification(
-      method: json["method"],
-      params: json["params"],
-    );
+    return LspNotification(method: json["method"], params: json["params"]);
   }
 
-  const LspNotification({
-    required this.method,
-    required this.params,
-  });
+  const LspNotification({required this.method, required this.params});
 
   final String method;
   final Map<String, dynamic> params;

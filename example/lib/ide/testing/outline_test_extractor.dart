@@ -1,7 +1,7 @@
 import 'dart:collection';
 
+import 'package:example/ide/lsp/outline.dart';
 import 'package:example/ide/testing/test_node.dart';
-import 'package:example/lsp_exploration/lsp/messages/outline.dart';
 
 /// Extracts tests from a Dart Outline.
 ///

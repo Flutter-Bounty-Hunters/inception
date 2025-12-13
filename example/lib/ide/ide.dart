@@ -8,13 +8,9 @@ import 'package:example/ide/problems_panel/problems_panel.dart';
 import 'package:example/ide/testing/test_panel.dart';
 import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
-import 'package:example/lsp_exploration/lsp/messages/did_open_text_document.dart';
-import 'package:example/lsp_exploration/lsp/messages/initialize.dart';
-import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:inception/inception.dart';
 
 import 'package:path/path.dart' as path;
 

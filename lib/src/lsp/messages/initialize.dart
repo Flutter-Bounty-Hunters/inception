@@ -1,4 +1,4 @@
-import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
+import 'code_actions.dart';
 
 class InitializeParams {
   InitializeParams({

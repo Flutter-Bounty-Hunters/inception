@@ -1,4 +1,4 @@
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
+import 'package:inception/inception.dart';
 
 /// A notification sent from the server to the client to provide outline information.
 ///

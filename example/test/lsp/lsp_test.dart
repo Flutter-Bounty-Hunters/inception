@@ -1,8 +1,5 @@
-import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
-import 'package:example/lsp_exploration/lsp/messages/hover.dart';
-import 'package:example/lsp_exploration/lsp/messages/rename_files_params.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inception/inception.dart';
 
 import 'test_tools.dart';
 
