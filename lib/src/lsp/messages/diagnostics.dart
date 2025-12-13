@@ -1,4 +1,4 @@
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
+import 'common_types.dart';
 
 class Diagnostic {
   const Diagnostic({

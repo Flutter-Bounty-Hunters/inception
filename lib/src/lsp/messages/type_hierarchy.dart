@@ -1,6 +1,7 @@
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
-import 'package:example/lsp_exploration/lsp/messages/document_symbols.dart';
+import 'package:inception/src/lsp/lsp_client.dart';
+
+import 'common_types.dart';
+import 'document_symbols.dart';
 
 class PrepareTypeHierarchyParams with TextDocumentPositionParams {
   PrepareTypeHierarchyParams({

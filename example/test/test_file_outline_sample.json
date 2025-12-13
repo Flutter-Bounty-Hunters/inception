@@ -1,0 +1,519 @@
+{
+  "outline": {
+    "children": [
+      {
+        "children": [
+          {
+            "codeRange": {
+              "end": {
+                "character": 43,
+                "line": 5
+              },
+              "start": {
+                "character": 2,
+                "line": 5
+              }
+            },
+            "element": {
+              "kind": "UNIT_TEST_TEST",
+              "name": "test(\"regular test without group\")",
+              "range": {
+                "end": {
+                  "character": 6,
+                  "line": 5
+                },
+                "start": {
+                  "character": 2,
+                  "line": 5
+                }
+              }
+            },
+            "range": {
+              "end": {
+                "character": 43,
+                "line": 5
+              },
+              "start": {
+                "character": 2,
+                "line": 5
+              }
+            }
+          },
+          {
+            "codeRange": {
+              "end": {
+                "character": 61,
+                "line": 7
+              },
+              "start": {
+                "character": 2,
+                "line": 7
+              }
+            },
+            "element": {
+              "kind": "UNIT_TEST_TEST",
+              "name": "testWidgets(\"widget test without group\")",
+              "range": {
+                "end": {
+                  "character": 13,
+                  "line": 7
+                },
+                "start": {
+                  "character": 2,
+                  "line": 7
+                }
+              }
+            },
+            "range": {
+              "end": {
+                "character": 61,
+                "line": 7
+              },
+              "start": {
+                "character": 2,
+                "line": 7
+              }
+            }
+          },
+          {
+            "codeRange": {
+              "end": {
+                "character": 77,
+                "line": 9
+              },
+              "start": {
+                "character": 2,
+                "line": 9
+              }
+            },
+            "element": {
+              "kind": "UNIT_TEST_GROUP",
+              "name": "testWidgetsOnAllPlatforms(\"custom runner without group\")",
+              "range": {
+                "end": {
+                  "character": 27,
+                  "line": 9
+                },
+                "start": {
+                  "character": 2,
+                  "line": 9
+                }
+              }
+            },
+            "range": {
+              "end": {
+                "character": 77,
+                "line": 9
+              },
+              "start": {
+                "character": 2,
+                "line": 9
+              }
+            }
+          },
+          {
+            "children": [
+              {
+                "codeRange": {
+                  "end": {
+                    "character": 49,
+                    "line": 12
+                  },
+                  "start": {
+                    "character": 4,
+                    "line": 12
+                  }
+                },
+                "element": {
+                  "kind": "UNIT_TEST_TEST",
+                  "name": "test(\"regular test inside root group\")",
+                  "range": {
+                    "end": {
+                      "character": 8,
+                      "line": 12
+                    },
+                    "start": {
+                      "character": 4,
+                      "line": 12
+                    }
+                  }
+                },
+                "range": {
+                  "end": {
+                    "character": 49,
+                    "line": 12
+                  },
+                  "start": {
+                    "character": 4,
+                    "line": 12
+                  }
+                }
+              },
+              {
+                "codeRange": {
+                  "end": {
+                    "character": 67,
+                    "line": 13
+                  },
+                  "start": {
+                    "character": 4,
+                    "line": 13
+                  }
+                },
+                "element": {
+                  "kind": "UNIT_TEST_TEST",
+                  "name": "testWidgets(\"widget test inside root group\")",
+                  "range": {
+                    "end": {
+                      "character": 15,
+                      "line": 13
+                    },
+                    "start": {
+                      "character": 4,
+                      "line": 13
+                    }
+                  }
+                },
+                "range": {
+                  "end": {
+                    "character": 67,
+                    "line": 13
+                  },
+                  "start": {
+                    "character": 4,
+                    "line": 13
+                  }
+                }
+              },
+              {
+                "codeRange": {
+                  "end": {
+                    "character": 88,
+                    "line": 14
+                  },
+                  "start": {
+                    "character": 4,
+                    "line": 14
+                  }
+                },
+                "element": {
+                  "kind": "UNIT_TEST_GROUP",
+                  "name": "testWidgetsOnAllPlatforms(\"custom runner test inside root group\")",
+                  "range": {
+                    "end": {
+                      "character": 29,
+                      "line": 14
+                    },
+                    "start": {
+                      "character": 4,
+                      "line": 14
+                    }
+                  }
+                },
+                "range": {
+                  "end": {
+                    "character": 88,
+                    "line": 14
+                  },
+                  "start": {
+                    "character": 4,
+                    "line": 14
+                  }
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "codeRange": {
+                          "end": {
+                            "character": 55,
+                            "line": 18
+                          },
+                          "start": {
+                            "character": 8,
+                            "line": 18
+                          }
+                        },
+                        "element": {
+                          "kind": "UNIT_TEST_TEST",
+                          "name": "test(\"regular test inside nested group\")",
+                          "range": {
+                            "end": {
+                              "character": 12,
+                              "line": 18
+                            },
+                            "start": {
+                              "character": 8,
+                              "line": 18
+                            }
+                          }
+                        },
+                        "range": {
+                          "end": {
+                            "character": 55,
+                            "line": 18
+                          },
+                          "start": {
+                            "character": 8,
+                            "line": 18
+                          }
+                        }
+                      },
+                      {
+                        "codeRange": {
+                          "end": {
+                            "character": 73,
+                            "line": 19
+                          },
+                          "start": {
+                            "character": 8,
+                            "line": 19
+                          }
+                        },
+                        "element": {
+                          "kind": "UNIT_TEST_TEST",
+                          "name": "testWidgets(\"widget test inside nested group\")",
+                          "range": {
+                            "end": {
+                              "character": 19,
+                              "line": 19
+                            },
+                            "start": {
+                              "character": 8,
+                              "line": 19
+                            }
+                          }
+                        },
+                        "range": {
+                          "end": {
+                            "character": 73,
+                            "line": 19
+                          },
+                          "start": {
+                            "character": 8,
+                            "line": 19
+                          }
+                        }
+                      },
+                      {
+                        "codeRange": {
+                          "end": {
+                            "character": 94,
+                            "line": 20
+                          },
+                          "start": {
+                            "character": 8,
+                            "line": 20
+                          }
+                        },
+                        "element": {
+                          "kind": "UNIT_TEST_GROUP",
+                          "name": "testWidgetsOnAllPlatforms(\"custom runner test inside nested group\")",
+                          "range": {
+                            "end": {
+                              "character": 33,
+                              "line": 20
+                            },
+                            "start": {
+                              "character": 8,
+                              "line": 20
+                            }
+                          }
+                        },
+                        "range": {
+                          "end": {
+                            "character": 94,
+                            "line": 20
+                          },
+                          "start": {
+                            "character": 8,
+                            "line": 20
+                          }
+                        }
+                      }
+                    ],
+                    "codeRange": {
+                      "end": {
+                        "character": 8,
+                        "line": 21
+                      },
+                      "start": {
+                        "character": 6,
+                        "line": 17
+                      }
+                    },
+                    "element": {
+                      "kind": "UNIT_TEST_GROUP",
+                      "name": "group(\"subgroup2\")",
+                      "range": {
+                        "end": {
+                          "character": 11,
+                          "line": 17
+                        },
+                        "start": {
+                          "character": 6,
+                          "line": 17
+                        }
+                      }
+                    },
+                    "range": {
+                      "end": {
+                        "character": 8,
+                        "line": 21
+                      },
+                      "start": {
+                        "character": 6,
+                        "line": 17
+                      }
+                    }
+                  }
+                ],
+                "codeRange": {
+                  "end": {
+                    "character": 6,
+                    "line": 22
+                  },
+                  "start": {
+                    "character": 4,
+                    "line": 16
+                  }
+                },
+                "element": {
+                  "kind": "UNIT_TEST_GROUP",
+                  "name": "group(\"subgroup1\")",
+                  "range": {
+                    "end": {
+                      "character": 9,
+                      "line": 16
+                    },
+                    "start": {
+                      "character": 4,
+                      "line": 16
+                    }
+                  }
+                },
+                "range": {
+                  "end": {
+                    "character": 6,
+                    "line": 22
+                  },
+                  "start": {
+                    "character": 4,
+                    "line": 16
+                  }
+                }
+              }
+            ],
+            "codeRange": {
+              "end": {
+                "character": 4,
+                "line": 23
+              },
+              "start": {
+                "character": 2,
+                "line": 11
+              }
+            },
+            "element": {
+              "kind": "UNIT_TEST_GROUP",
+              "name": "group(\"root group\")",
+              "range": {
+                "end": {
+                  "character": 7,
+                  "line": 11
+                },
+                "start": {
+                  "character": 2,
+                  "line": 11
+                }
+              }
+            },
+            "range": {
+              "end": {
+                "character": 4,
+                "line": 23
+              },
+              "start": {
+                "character": 2,
+                "line": 11
+              }
+            }
+          }
+        ],
+        "codeRange": {
+          "end": {
+            "character": 1,
+            "line": 24
+          },
+          "start": {
+            "character": 0,
+            "line": 4
+          }
+        },
+        "element": {
+          "kind": "FUNCTION",
+          "name": "main",
+          "parameters": "()",
+          "range": {
+            "end": {
+              "character": 9,
+              "line": 4
+            },
+            "start": {
+              "character": 5,
+              "line": 4
+            }
+          },
+          "returnType": "void"
+        },
+        "range": {
+          "end": {
+            "character": 1,
+            "line": 24
+          },
+          "start": {
+            "character": 0,
+            "line": 4
+          }
+        }
+      }
+    ],
+    "codeRange": {
+      "end": {
+        "character": 0,
+        "line": 25
+      },
+      "start": {
+        "character": 0,
+        "line": 0
+      }
+    },
+    "element": {
+      "kind": "COMPILATION_UNIT",
+      "name": "<unit>",
+      "range": {
+        "end": {
+          "character": 0,
+          "line": 25
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      }
+    },
+    "range": {
+      "end": {
+        "character": 0,
+        "line": 25
+      },
+      "start": {
+        "character": 0,
+        "line": 0
+      }
+    }
+  },
+  "uri": "file:///Users/angelosilvestre/dev/inception/example/test/lsp/test_project/test/widget_test.dart"
+}
