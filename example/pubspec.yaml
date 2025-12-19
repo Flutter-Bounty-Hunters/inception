@@ -13,14 +13,12 @@ dependencies:
     sdk: flutter
 
   analyzer: ^6.4.1
+  inception:
+    path: ../
   super_editor:
     git:
       url: https://github.com/superlistapp/super_editor.git
       path: super_editor/
-  super_editor_markdown:
-    git:
-      url: https://github.com/superlistapp/super_editor.git
-      path: super_editor_markdown/
   super_text_layout:
     git:
       url: https://github.com/superlistapp/super_editor.git
@@ -33,7 +31,7 @@ dependencies:
   file_picker: ^8.1.2
   flutter_fancy_tree_view: ^1.6.0
 
-  follow_the_leader: ^0.0.4+8
+  follow_the_leader: ^0.5.2
   path: ^1.9.0
   two_dimensional_scrollables: ^0.3.2
   shared_preferences: ^2.3.2

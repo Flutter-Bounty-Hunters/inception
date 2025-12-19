@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:example/ide/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:super_editor/super_editor.dart';
+
+import 'theme.dart';
 
 // TODO: Define and implement a CodeLinesLayout, similar to CodeLineLayout, but
 //       for the whole file.
@@ -15,12 +17,23 @@ class CodeLines extends StatefulWidget {
   const CodeLines({
     super.key,
     required this.codeLines,
+    this.gutterColor = lineColor,
+    required this.gutterBorderColor,
+    required this.lineBackgroundColor,
     required this.indentLineColor,
     required this.baseTextStyle,
+    // this.perLineOverlays = const [],
+    // this.perLineUnderlays = const [],
   });
 
   /// All lines of source code, with syntax highlighting already applied.
   final List<TextSpan> codeLines;
+
+  final Color gutterColor;
+
+  final Color gutterBorderColor;
+
+  final Color lineBackgroundColor;
 
   /// The color of little lines that appear on the upstream side of the code in the
   /// indentation area.
@@ -28,6 +41,10 @@ class CodeLines extends StatefulWidget {
 
   /// The base text style, applied beneath the styles in [code], and also applied to the indent line spacing.
   final TextStyle baseTextStyle;
+
+  // final List<CodeLineLayerWidgetBuilder> perLineUnderlays;
+  //
+  // final List<CodeLineLayerWidgetBuilder> perLineOverlays;
 
   @override
   State<CodeLines> createState() => _CodeLinesState();
@@ -181,29 +198,35 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.text,
-      child: widget.codeLines.isNotEmpty
-          ? CodeScroller(
-              delegate: TwoDimensionalChildBuilderDelegate(
-                maxXIndex: 1,
-                maxYIndex: widget.codeLines.length - 1,
-                builder: (context, vicinity) {
-                  if (vicinity.xIndex == 0) {
-                    return _buildLineIndicator(vicinity.yIndex);
-                  }
+    return ColoredBox(
+      color: widget.lineBackgroundColor,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.text,
+        child: widget.codeLines.isNotEmpty
+            ? CodeScroller(
+                delegate: TwoDimensionalChildBuilderDelegate(
+                  maxXIndex: 1,
+                  maxYIndex: widget.codeLines.length - 1,
+                  builder: (context, vicinity) {
+                    if (vicinity.xIndex == 0) {
+                      return _buildLineIndicator(vicinity.yIndex);
+                    }
 
-                  return _buildCodeLine(vicinity.yIndex);
-                },
-              ),
-            )
-          : const SizedBox(),
+                    return _buildCodeLine(vicinity.yIndex);
+                  },
+                ),
+              )
+            : const SizedBox(),
+      ),
     );
   }
 
   Widget _buildLineIndicator(int lineIndex) {
-    return ColoredBox(
-      color: lineColor,
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.gutterColor,
+        border: Border(right: BorderSide(color: widget.gutterBorderColor)),
+      ),
       child: Padding(
         padding: const EdgeInsets.only(right: 20),
         child: Text(
@@ -271,6 +294,8 @@ class CodeLine extends StatefulWidget {
     required this.code,
     required this.indentLineColor,
     required this.baseTextStyle,
+    // this.overlays = const [],
+    // this.underlays = const [],
   });
 
   /// Line number for this line within its overall source file, starting at zero.
@@ -285,6 +310,12 @@ class CodeLine extends StatefulWidget {
 
   /// The base text style, applied beneath the styles in [code], and also applied to the indent line spacing.
   final TextStyle baseTextStyle;
+
+// TODO: Define a contract for CodeLineLayerWidgetBuilder, which takes in all
+//       info about a code line (including layout) and builds widgets based on it.
+  // final List<CodeLineLayerWidgetBuilder> underlays;
+  //
+  // final List<CodeLineLayerWidgetBuilder> overlays;
 
   @override
   State<CodeLine> createState() => _CodeLineState();
@@ -398,36 +429,42 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
       tabCount = (leadingSpaceMatch.end ~/ 2) - 1;
     }
 
-    return Stack(
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return BoxContentLayers(
+      content: (context) => Padding(
+        padding: const EdgeInsets.only(left: 8.0),
+        child: Stack(
           children: [
-            const SizedBox(width: 2),
-            for (int i = 0; i < tabCount; i += 1) //
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border(
-                    right: BorderSide(
-                      color: widget.indentLineColor,
-                      width: 1,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (int i = 0; i < tabCount; i += 1) //
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: BorderSide(
+                          color: widget.indentLineColor,
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      "  ",
+                      style: widget.baseTextStyle,
                     ),
                   ),
-                ),
-                child: Text(
-                  "  ",
-                  style: widget.baseTextStyle,
-                ),
-              ),
+              ],
+            ),
+            Text.rich(
+              key: _codeTextKey,
+              widget.code,
+              style: widget.baseTextStyle,
+            ),
           ],
         ),
-        Text.rich(
-          key: _codeTextKey,
-          widget.code,
-          style: widget.baseTextStyle,
-        ),
-      ],
+      ),
+      // underlays: widget.underlays,
+      // overlays: widget.overlays,
     );
   }
 }
