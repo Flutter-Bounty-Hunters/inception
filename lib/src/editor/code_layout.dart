@@ -4,9 +4,10 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:inception/src/document/selection.dart';
+import 'package:inception/src/editor/theme.dart';
 import 'package:super_editor/super_editor.dart';
-
-import 'theme.dart';
+import 'package:super_text_layout/super_text_layout.dart';
 
 // TODO: Define and implement a CodeLinesLayout, similar to CodeLineLayout, but
 //       for the whole file.
@@ -22,6 +23,8 @@ class CodeLines extends StatefulWidget {
     required this.lineBackgroundColor,
     required this.indentLineColor,
     required this.baseTextStyle,
+    this.shadowCaretPosition,
+    this.caretPosition,
     // this.perLineOverlays = const [],
     // this.perLineUnderlays = const [],
   });
@@ -41,6 +44,10 @@ class CodeLines extends StatefulWidget {
 
   /// The base text style, applied beneath the styles in [code], and also applied to the indent line spacing.
   final TextStyle baseTextStyle;
+
+  final CodePosition? shadowCaretPosition;
+
+  final CodePosition? caretPosition;
 
   // final List<CodeLineLayerWidgetBuilder> perLineUnderlays;
   //
@@ -250,6 +257,11 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
       code: widget.codeLines[lineIndex],
       indentLineColor: widget.indentLineColor,
       baseTextStyle: widget.baseTextStyle,
+      shadowCaretPosition: widget.shadowCaretPosition?.line == lineIndex
+          ? TextPosition(offset: widget.shadowCaretPosition!.characterOffset)
+          : null,
+      caretPosition:
+          widget.caretPosition?.line == lineIndex ? TextPosition(offset: widget.caretPosition!.characterOffset) : null,
     );
   }
 }
@@ -294,6 +306,8 @@ class CodeLine extends StatefulWidget {
     required this.code,
     required this.indentLineColor,
     required this.baseTextStyle,
+    this.shadowCaretPosition,
+    this.caretPosition,
     // this.overlays = const [],
     // this.underlays = const [],
   });
@@ -310,6 +324,10 @@ class CodeLine extends StatefulWidget {
 
   /// The base text style, applied beneath the styles in [code], and also applied to the indent line spacing.
   final TextStyle baseTextStyle;
+
+  final TextPosition? shadowCaretPosition;
+
+  final TextPosition? caretPosition;
 
 // TODO: Define a contract for CodeLineLayerWidgetBuilder, which takes in all
 //       info about a code line (including layout) and builds widgets based on it.
@@ -357,12 +375,14 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
       return null;
     }
 
-    final renderParagraph = _renderParagraph;
-    final paragraphLocalOffset = renderParagraph.globalToLocal(localOffset, ancestor: codeLineBox);
+    final textRenderBox = _textRenderBox;
+    final paragraphLocalOffset = textRenderBox.globalToLocal(localOffset, ancestor: codeLineBox);
     //print("Local offset: $paragraphLocalOffset");
-    final textPosition = renderParagraph.getPositionForOffset(paragraphLocalOffset);
+
+    final textLayout = _textLayout;
+    final textPosition = textLayout.getPositionNearestToOffset(paragraphLocalOffset);
     //print("Text position: $textPosition");
-    final wordRange = renderParagraph.getWordBoundary(textPosition);
+    final wordRange = textLayout.getWordSelectionAt(textPosition);
     //print("Word range: $wordRange");
     //ðprint("Word: '${renderParagraph.text.toPlainText().substring(wordRange.start, wordRange.end)}'");
     return CodeRange(
@@ -379,27 +399,28 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
 
   @override
   CodePosition findCodePositionNearestLocalOffset(Offset localOffset) {
-    final renderParagraph = _renderParagraph;
-    final textPosition = renderParagraph.getPositionForOffset(localOffset);
+    final textPosition = _textLayout.getPositionNearestToOffset(localOffset);
     return CodePosition(widget.lineNumber, textPosition.offset);
   }
 
   @override
   List<TextBox> getBoxesForSelection(TextSelection selection) {
-    final boxes = _renderParagraph.getBoxesForSelection(
+    final boxes = _textLayout.getBoxesForSelection(
       selection,
       boxHeightStyle: BoxHeightStyle.max,
       boxWidthStyle: BoxWidthStyle.max,
     );
 
-    final renderBox = context.findRenderObject() as RenderBox;
+    final lineBox = context.findRenderObject() as RenderBox;
+    final textRenderBox = _textRenderBox;
+
     return boxes.map(
       (textBox) {
-        final topLeft = renderBox.globalToLocal(
-          _renderParagraph.localToGlobal(Offset(textBox.left, textBox.top)),
+        final topLeft = lineBox.globalToLocal(
+          textRenderBox.localToGlobal(Offset(textBox.left, textBox.top)),
         );
-        final bottomRight = renderBox.globalToLocal(
-          _renderParagraph.localToGlobal(Offset(textBox.right, textBox.bottom)),
+        final bottomRight = lineBox.globalToLocal(
+          textRenderBox.localToGlobal(Offset(textBox.right, textBox.bottom)),
         );
 
         return TextBox.fromLTRBD(
@@ -413,7 +434,12 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
     ).toList();
   }
 
-  RenderParagraph get _renderParagraph => _codeTextKey.currentContext!.findRenderObject() as RenderParagraph;
+  // RenderParagraph get _renderParagraph => _codeTextKey.currentContext!.findRenderObject() as RenderParagraph;
+
+  RenderBox get _textRenderBox => _codeTextKey.currentContext!.findRenderObject() as RenderBox;
+
+  ProseTextLayout get _textLayout =>
+      (_codeTextKey.currentContext!.findRenderObject() as RenderSuperTextLayout).state.textLayout;
 
   @override
   Widget build(BuildContext context) {
@@ -428,6 +454,14 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
       // -1 because the very first indentation line is the same as the divider between lines and code.
       tabCount = (leadingSpaceMatch.end ~/ 2) - 1;
     }
+
+    if (widget.caretPosition != null) {
+      print("Line ${widget.lineNumber} has caret at: ${widget.caretPosition}");
+    }
+
+    // if (widget.shadowCaretPosition != null) {
+    //   print("Line ${widget.lineNumber} has shadow caret at: ${widget.shadowCaretPosition}");
+    // }
 
     return BoxContentLayers(
       content: (context) => Padding(
@@ -455,17 +489,76 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
                   ),
               ],
             ),
-            Text.rich(
+            // Text.rich(
+            //   key: _codeTextKey,
+            //   widget.code,
+            //   style: widget.baseTextStyle,
+            // ),
+            SuperText(
               key: _codeTextKey,
-              widget.code,
-              style: widget.baseTextStyle,
+              richText: TextSpan(
+                style: widget.baseTextStyle,
+                children: [widget.code],
+              ),
+              layerBeneathBuilder: (context, layout) {
+                final shadowCaretPosition = widget.shadowCaretPosition;
+                final caretPosition = widget.caretPosition;
+
+                return Stack(
+                  children: [
+                    if (shadowCaretPosition != null) //
+                      Positioned(
+                        left: layout.getOffsetForCaret(shadowCaretPosition).dx,
+                        top: layout.getOffsetForCaret(shadowCaretPosition).dy,
+                        height: layout.getHeightForCaret(shadowCaretPosition),
+                        child: Container(
+                          width: 1,
+                          // height: 20,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    if (caretPosition != null) //
+                      Positioned(
+                        left: layout.getOffsetForCaret(caretPosition).dx,
+                        top: layout.getOffsetForCaret(caretPosition).dy,
+                        height: layout.getHeightForCaret(caretPosition),
+                        child: Container(
+                          width: 2,
+                          color: Colors.lightBlue,
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ],
         ),
       ),
       // underlays: widget.underlays,
       // overlays: widget.overlays,
+      underlays: [
+        _buildShadowCaret,
+      ],
     );
+  }
+
+  ContentLayerWidget _buildShadowCaret(BuildContext context) {
+    return _ShadowCaretContentLayer(widget.shadowCaretPosition);
+  }
+}
+
+class _ShadowCaretContentLayer extends ContentLayerStatelessWidget {
+  const _ShadowCaretContentLayer(this.shadowCaretOffset);
+
+  final TextPosition? shadowCaretOffset;
+
+  @override
+  Widget doBuild(BuildContext context, Element? contentElement, RenderObject? contentLayout) {
+    if (shadowCaretOffset != null) {
+      print("Line element: ${contentElement.runtimeType}, render object: ${contentLayout.runtimeType}");
+    }
+
+    return const EmptyContentLayer();
   }
 }
 
@@ -775,78 +868,4 @@ abstract interface class CodeLineLayout {
   ///
   ///  * [RenderParagraph.getBoxesForSelection].
   List<TextBox> getBoxesForSelection(TextSelection selection);
-}
-
-class CodeSelection {
-  const CodeSelection({
-    required this.base,
-    required this.extent,
-  });
-
-  final CodePosition base;
-  final CodePosition extent;
-
-  CodeRange toRange() {
-    final affinity = extent.line > base.line || extent.characterOffset >= base.characterOffset
-        ? TextAffinity.downstream
-        : TextAffinity.upstream;
-
-    return CodeRange(
-      affinity == TextAffinity.downstream ? base : extent,
-      affinity == TextAffinity.downstream ? extent : base,
-    );
-  }
-}
-
-/// A range of code, from a starting line and offset, to an ending line and offset.
-class CodeRange {
-  const CodeRange(this.start, this.end) : assert(start <= end);
-
-  final CodePosition start;
-  final CodePosition end;
-
-  CodeSelection toSelection([TextAffinity affinity = TextAffinity.downstream]) {
-    return CodeSelection(
-      base: affinity == TextAffinity.downstream ? start : end,
-      extent: affinity == TextAffinity.downstream ? end : start,
-    );
-  }
-
-  @override
-  String toString() => "[CodeRange - $start -> $end]";
-}
-
-class CodePosition implements Comparable<CodePosition> {
-  const CodePosition(this.line, this.characterOffset);
-
-  final int line;
-  final int characterOffset;
-
-  bool operator <(CodePosition other) {
-    return compareTo(other) < 0;
-  }
-
-  bool operator <=(CodePosition other) {
-    return compareTo(other) <= 0;
-  }
-
-  bool operator >(CodePosition other) {
-    return compareTo(other) > 0;
-  }
-
-  bool operator >=(CodePosition other) {
-    return compareTo(other) >= 0;
-  }
-
-  @override
-  int compareTo(CodePosition other) {
-    if (line == other.line) {
-      return characterOffset - other.characterOffset;
-    }
-
-    return line - other.line;
-  }
-
-  @override
-  String toString() => "(line: $line, offset: $characterOffset)";
 }
