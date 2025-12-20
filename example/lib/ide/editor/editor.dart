@@ -5,14 +5,10 @@ import 'dart:math';
 import 'package:example/ide/editor/syntax_highlighting.dart';
 import 'package:example/ide/infrastructure/keyboard_shortcuts.dart';
 import 'package:example/ide/infrastructure/popover_list.dart';
-import 'package:inception/inception.dart';
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
-import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
-import 'package:example/lsp_exploration/lsp/messages/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:follow_the_leader/follow_the_leader.dart';
+import 'package:inception/inception.dart';
 import 'package:path/path.dart' as path;
 import 'package:super_editor/super_editor.dart';
 import 'package:syntax_highlight/syntax_highlight.dart';
@@ -69,6 +65,7 @@ class _IdeEditorState extends State<IdeEditor> {
   var _styledLines = <TextSpan>[];
 
   Position? _currentSelectedPosition;
+  late Editor _editor;
 
   @override
   void initState() {
@@ -78,6 +75,8 @@ class _IdeEditorState extends State<IdeEditor> {
       _fileContent.value = widget.sourceFile!.readAsStringSync();
     }
     _initializeSyntaxHighlighting();
+    _editor = createDefaultDocumentEditor(document: MutableDocument());
+    _hoverPopoverDocument.addListener(_onHoverPopoverDocumentChange);
 
     _fileContent.addListener(_onFileContentChange);
   }
@@ -103,6 +102,7 @@ class _IdeEditorState extends State<IdeEditor> {
     _hoverTimer?.cancel();
     _fileContent.dispose();
     _focusNode.dispose();
+    _hoverPopoverDocument.removeListener(_onHoverPopoverDocumentChange);
     super.dispose();
   }
 
@@ -366,6 +366,12 @@ class _IdeEditorState extends State<IdeEditor> {
     _actionsOverlayController.show();
   }
 
+  void _onHoverPopoverDocumentChange() {
+    _editor = createDefaultDocumentEditor(
+      document: (_hoverPopoverDocument.value as MutableDocument?) ?? MutableDocument(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Actions(
@@ -488,7 +494,7 @@ class _IdeEditorState extends State<IdeEditor> {
                 valueListenable: _hoverPopoverDocument,
                 builder: (context, document, child) {
                   return SuperReader(
-                    editor: createDefaultDocumentEditor(document: document as MutableDocument),
+                    editor: _editor,
                     stylesheet: defaultStylesheet.copyWith(
                       addRulesAfter: [
                         ...darkModeStyles,

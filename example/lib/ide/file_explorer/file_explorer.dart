@@ -3,14 +3,12 @@ import 'dart:math';
 
 import 'package:example/ide/ide.dart';
 import 'package:example/ide/infrastructure/user_settings.dart';
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:inception/inception.dart';
 import 'package:two_dimensional_scrollables/two_dimensional_scrollables.dart';
 import 'package:path/path.dart' as path;
-
-import '../../lsp_exploration/lsp/messages/rename_files_params.dart';
 
 // TODO:
 //  - switch from single, double tap recognizers to multi-tap to get rid of selection delay

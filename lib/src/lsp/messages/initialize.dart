@@ -1,4 +1,4 @@
-import 'package:example/lsp_exploration/lsp/messages/code_actions.dart';
+import 'code_actions.dart';
 
 class InitializeParams {
   InitializeParams({
@@ -7,6 +7,7 @@ class InitializeParams {
     required this.rootUri,
     this.workspaceFolders = const [],
     required this.capabilities,
+    this.initializationOptions = const {},
     this.locale,
   });
 
@@ -39,6 +40,11 @@ class InitializeParams {
   /// The capabilities provided by the client (editor or tool).
   final LspClientCapabilities capabilities;
 
+  /// User provided initialization options.
+  ///
+  /// Each LSP server can define its own initialization options.
+  final Map<String, dynamic> initializationOptions;
+
   /// The workspace folders configured in the client when the server starts.
   ///
   /// This property is only available if the client supports workspace folders.
@@ -56,6 +62,7 @@ class InitializeParams {
       'capabilities': capabilities.toJson(),
       'locale': locale,
       'workspaceFolders': workspaceFolders.map((e) => e.toJson()).toList(),
+      'initializationOptions': initializationOptions,
     };
   }
 }

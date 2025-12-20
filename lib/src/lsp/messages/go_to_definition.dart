@@ -1,4 +1,4 @@
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
+import 'common_types.dart';
 
 // TODO: maybe we want to get rid of TextDocumentPositionParams.
 class DefinitionsParams with TextDocumentPositionParams {

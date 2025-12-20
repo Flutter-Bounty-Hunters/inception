@@ -1,5 +1,6 @@
-import 'package:example/ide/problems_panel/diagnostics.dart';
-import 'package:example/lsp_exploration/lsp/messages/common_types.dart';
+import 'package:inception/src/lsp/messages/diagnostics.dart';
+
+import 'common_types.dart';
 
 class CodeActionsParams {
   CodeActionsParams({

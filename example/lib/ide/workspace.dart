@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:example/lsp_exploration/lsp/lsp_client.dart';
+import 'package:inception/inception.dart';
 
 /// A context that applies to a single IDE window.
 ///
@@ -9,7 +9,15 @@ import 'package:example/lsp_exploration/lsp/lsp_client.dart';
 /// path of the open directory, the Dart LSP client for the given
 /// session, etc.
 class Workspace {
-  Workspace(this.directory) : lspClient = LspClient();
+  Workspace(this.directory)
+      : lspClient = LspClient(
+          executable: 'ls',
+          // params: [
+          //   'language-server', //
+          //   '--client-id', 'inception.plugin', //
+          //   '--client-version', '0.1'
+          // ],
+        );
 
   final Directory directory;
 

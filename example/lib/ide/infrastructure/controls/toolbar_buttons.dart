@@ -1,3 +1,4 @@
+import 'package:example/ide/infrastructure/controls/hover_box.dart';
 import 'package:flutter/material.dart';
 
 class VerticalIconButtonToolbar extends StatelessWidget {
@@ -56,12 +57,14 @@ class TriStateIconButton extends StatefulWidget {
     required this.icon,
     required this.iconSize,
     required this.iconColor,
+    this.tooltip = '',
     required this.onPressed,
   });
 
   final IconData icon;
   final double iconSize;
   final Color iconColor;
+  final String tooltip;
   final VoidCallback onPressed;
 
   @override
@@ -75,56 +78,26 @@ class _TriStateIconButtonState extends State<TriStateIconButton> {
       aspectRatio: 1.0,
       child: MouseRegion(
         cursor: WidgetStateMouseCursor.clickable,
-        child: _HoverBox(
+        child: HoverBox(
           baseDecoration: BoxDecoration(
             borderRadius: BorderRadius.circular(4),
           ),
           hoverColor: Colors.white.withOpacity(0.05),
-          child: Center(
-            child: Icon(
-              widget.icon,
-              size: widget.iconSize,
-              color: widget.iconColor,
+          child: Tooltip(
+            message: widget.tooltip,
+            waitDuration: const Duration(milliseconds: 500),
+            child: GestureDetector(
+              onTap: widget.onPressed,
+              child: Center(
+                child: Icon(
+                  widget.icon,
+                  size: widget.iconSize,
+                  color: widget.iconColor,
+                ),
+              ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _HoverBox extends StatefulWidget {
-  const _HoverBox({
-    required this.baseDecoration,
-    required this.hoverColor,
-    required this.child,
-  });
-
-  final BoxDecoration baseDecoration;
-  final Color hoverColor;
-  final Widget child;
-
-  @override
-  State<_HoverBox> createState() => _HoverBoxState();
-}
-
-class _HoverBoxState extends State<_HoverBox> {
-  bool _isHovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() {
-        _isHovering = true;
-      }),
-      onExit: (_) => setState(() {
-        _isHovering = false;
-      }),
-      child: DecoratedBox(
-        decoration: widget.baseDecoration.copyWith(
-          color: _isHovering ? widget.hoverColor : Colors.transparent,
-        ),
-        child: widget.child,
       ),
     );
   }
