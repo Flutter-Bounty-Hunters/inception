@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/gestures.dart';
@@ -44,7 +45,7 @@ class CodeLines extends StatefulWidget {
   State<CodeLines> createState() => CodeLinesState();
 }
 
-class CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
+class CodeLinesState extends State<CodeLines> implements CodeLayout {
   final _lineKeys = <int, GlobalKey>{};
 
   CodePosition? get caretPosition => widget.selection?.extent;
@@ -96,6 +97,42 @@ class CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
         widget.codeLines.length - 1,
         widget.codeLines.last.toPlainText().length,
       );
+
+  @override
+  CodePosition? findPositionInLineAbove(CodePosition position, {double? preferredXOffset}) {
+    if (position.line <= 0 || position.line > widget.codeLines.length) {
+      return null;
+    }
+
+    final lineAboveIndex = position.line - 1;
+    final codeLine = _lineKeys[lineAboveIndex]!.asCodeLine;
+    if (preferredXOffset != null) {
+      return codeLine.findCodePositionNearestLocalOffset(Offset(preferredXOffset, 0));
+    } else {
+      return CodePosition(
+        lineAboveIndex,
+        min(position.characterOffset, widget.codeLines[lineAboveIndex].toPlainText().length),
+      );
+    }
+  }
+
+  @override
+  CodePosition? findPositionInLineBelow(CodePosition position, {double? preferredXOffset}) {
+    if (position.line >= widget.codeLines.length || position.line < -1) {
+      return null;
+    }
+
+    final lineBelowIndex = position.line + 1;
+    final codeLine = _lineKeys[lineBelowIndex]!.asCodeLine;
+    if (preferredXOffset != null) {
+      return codeLine.findCodePositionNearestLocalOffset(Offset(preferredXOffset, 0));
+    } else {
+      return CodePosition(
+        lineBelowIndex,
+        min(position.characterOffset, widget.codeLines[lineBelowIndex].toPlainText().length),
+      );
+    }
+  }
 
   @override
   CodeRange? findWordBoundaryAtGlobalOffset(Offset globalOffset) {
@@ -261,13 +298,9 @@ class CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   }
 
   @override
-  double getLocalXForCaret(CodePosition position) {
-    final codeLineBox = _lineKeys[position.line]!.currentContext!.findRenderObject() as RenderBox;
+  double getXForCaretInCodeLine(CodePosition position) {
     final codeLine = _lineKeys[position.line]!.asCodeLine;
-    final codeLineCaretX = codeLine.getLocalXForCaret(position.characterOffset);
-
-    final codeLinesBox = context.findRenderObject() as RenderBox;
-    return codeLineBox.localToGlobal(Offset(codeLineCaretX, 0), ancestor: codeLinesBox).dx;
+    return codeLine.getLocalXForCaret(position.characterOffset);
   }
 
   @override
@@ -393,19 +426,19 @@ class CodeLinesStyle {
 
 extension CodeLinesLayoutFromContext on GlobalKey {
   /// Assumes this [GlobalKey] is attached to a [CodeLines] widget, and returns
-  /// the [CodeLinesLayout] for the code layout.
+  /// the [CodeLayout] for the code layout.
   ///
   /// This method is a verbosity reduction for repeated access of code layout.
-  CodeLinesLayout get asCodeLines => currentState as CodeLinesLayout;
+  CodeLayout get asCodeLines => currentState as CodeLayout;
 }
 
-abstract interface class CodeLinesLayout {
+abstract interface class CodeLayout {
   /// Returns the [CodePosition] immediately preceding [position], or `null` if the [position]
   /// is at the start of the code document.
   ///
   /// {@template code_document_convenience}
   /// This information could be pulled from the [CodeDocument], but its implemented
-  /// in [CodeLinesLayout] for convenience for use-cases that may not have easy access
+  /// in [CodeLayout] for convenience for use-cases that may not have easy access
   /// to the associated [CodeDocument].
   /// {@endtemplate}
   CodePosition? findPositionBefore(CodePosition position);
@@ -420,6 +453,16 @@ abstract interface class CodeLinesLayout {
   ///
   /// {@macro code_document_convenience}
   CodePosition findEndPosition();
+
+  /// Returns the [CodePosition] in the line above [position], choosing a character offset that's
+  /// near the [preferredXOffset], or if it's `null`, choosing a character offset as close as possible
+  /// to [position.characterOffset].
+  CodePosition? findPositionInLineAbove(CodePosition position, {double? preferredXOffset});
+
+  /// Returns the [CodePosition] in the line below [position], choosing a character offset that's
+  /// near the [preferredXOffset], or if it's `null`, choosing a character offset as close as possible
+  /// to [position.characterOffset].
+  CodePosition? findPositionInLineBelow(CodePosition position, {double? preferredXOffset});
 
   /// Returns the bounds that surround the word that appears at the given
   /// [globalOffset].
@@ -454,11 +497,14 @@ abstract interface class CodeLinesLayout {
   /// given [position], i.e., the x-offset between two sequential characters, or before/after
   /// the first/last character.
   ///
+  /// The x-offset is measured from the start of the text portion of the line of code, ignoring any
+  /// gutter direction on the left, and ignoring any horizontal scroll offset.
+  ///
   /// This x-offset isn't necessarily used by an editor to display the caret. An editor is free
   /// to choose whatever offset, width, and height it desired for the caret. Rather, this x-offset
   /// is made available for any layout calculations that want to operate between characters, instead
   /// of within a given character.
-  double getLocalXForCaret(CodePosition position);
+  double getXForCaretInCodeLine(CodePosition position);
 
   /// Returns a list of [TextBox]es that bound the content selected in the given [codeRange],
   /// in local coordinates.
@@ -622,7 +668,9 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
   double getLocalXForCaret(int characterOffset) {
     final textLayoutOffset = _textLayout.getOffsetForCaret(TextPosition(offset: characterOffset));
     final codeLineBox = context.findRenderObject() as RenderBox;
-    return _textRenderBox.localToGlobal(textLayoutOffset, ancestor: codeLineBox).dx;
+    final codeLineOffset = _textRenderBox.localToGlobal(textLayoutOffset, ancestor: codeLineBox).dx;
+
+    return codeLineOffset;
   }
 
   RenderBox get _textRenderBox => _codeTextKey.currentContext!.findRenderObject() as RenderBox;

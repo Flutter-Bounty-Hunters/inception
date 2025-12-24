@@ -42,7 +42,7 @@ CodeLinesState findCodeLines(String interactionDescription, [Finder? codeLinesFi
   return codeLayout;
 }
 
-/// Finds and returns the [CodeLinesLayout] and the [RenderBox] belonging to a [CodeLines] widget
+/// Finds and returns the [CodeLayout] and the [RenderBox] belonging to a [CodeLines] widget
 /// in the widget tree.
 ///
 /// The [CodeLines] widget is found with the given [codeLayoutFinder], or is found `byType()` if no
@@ -54,7 +54,7 @@ CodeLinesState findCodeLines(String interactionDescription, [Finder? codeLinesFi
 ///
 ///     Tried to "click on line 3 at offset 10", but didn't find a CodeLinesLayout in the widget tree.
 ///
-(CodeLinesLayout, RenderBox) findCodeLayout(String interactionDescription, [Finder? codeLayoutFinder]) {
+(CodeLayout, RenderBox) findCodeLayout(String interactionDescription, [Finder? codeLayoutFinder]) {
   final finderResults = (codeLayoutFinder ?? find.byType(CodeLines)).evaluate();
   if (finderResults.isEmpty) {
     throw Exception(
@@ -74,11 +74,11 @@ CodeLinesState findCodeLines(String interactionDescription, [Finder? codeLinesFi
     );
   }
   final codeLayout = codeLayoutElement.state;
-  if (codeLayout is! CodeLinesLayout) {
+  if (codeLayout is! CodeLayout) {
     throw Exception(
       "Tried to $interactionDescription, but the StatefulWidget doesn't implement CodeLinesLayout. It should.",
     );
   }
 
-  return (codeLayout as CodeLinesLayout, codeLayoutElement.state.context.findRenderObject() as RenderBox);
+  return (codeLayout as CodeLayout, codeLayoutElement.state.context.findRenderObject() as RenderBox);
 }

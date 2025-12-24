@@ -21,6 +21,10 @@ class _CodeEditorState extends State<CodeEditor> {
 
   final _codeLayoutKey = GlobalKey(debugLabel: 'code-layout');
 
+  /// The preferred x-offset from the left side of the editor when the user
+  /// moves the caret up/down lines.
+  double? _preferredCaretXOffset;
+
   @override
   void initState() {
     super.initState();
@@ -38,10 +42,12 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _onTapDown(TapDownDetails details) {
-    final codeLayout = _codeLayoutKey.currentState as CodeLinesLayout;
+    final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final codeTapPosition = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
 
     widget.presenter.selection.value = CodeSelection.collapsed(codeTapPosition);
+
+    _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
 
     // Ensure the editor has focus, now that the user has clicked it.
     _focusNode.requestFocus();
@@ -65,6 +71,8 @@ class _CodeEditorState extends State<CodeEditor> {
           if (nextPosition != null) {
             // Move the caret to the next position.
             widget.presenter.selection.value = CodeSelection.collapsed(nextPosition);
+
+            _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
           }
         } else {
           // TODO: Handle expanded selection
@@ -82,6 +90,48 @@ class _CodeEditorState extends State<CodeEditor> {
           if (nextPosition != null) {
             // Move the caret to the next position.
             widget.presenter.selection.value = CodeSelection.collapsed(nextPosition);
+
+            _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
+          }
+        } else {
+          // TODO: Handle expanded selection
+        }
+
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowUp:
+        final selection = widget.presenter.selection.value;
+        if (selection == null) {
+          return KeyEventResult.ignored;
+        }
+
+        if (selection.isCollapsed) {
+          final positionAbove = _codeLayout.findPositionInLineAbove(
+            selection.extent,
+            preferredXOffset: _preferredCaretXOffset,
+          );
+          if (positionAbove != null) {
+            // Move the caret to the line above.
+            widget.presenter.selection.value = CodeSelection.collapsed(positionAbove);
+          }
+        } else {
+          // TODO: Handle expanded selection
+        }
+
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowDown:
+        final selection = widget.presenter.selection.value;
+        if (selection == null) {
+          return KeyEventResult.ignored;
+        }
+
+        if (selection.isCollapsed) {
+          final positionAbove = _codeLayout.findPositionInLineBelow(
+            selection.extent,
+            preferredXOffset: _preferredCaretXOffset,
+          );
+          if (positionAbove != null) {
+            // Move the caret to the line below.
+            widget.presenter.selection.value = CodeSelection.collapsed(positionAbove);
           }
         } else {
           // TODO: Handle expanded selection
@@ -91,6 +141,16 @@ class _CodeEditorState extends State<CodeEditor> {
       default:
         return KeyEventResult.ignored;
     }
+  }
+
+  void _updatePreferredCaretXOffsetToMatchCurrentCaretOffset() {
+    final selection = widget.presenter.selection.value;
+    if (selection == null || selection.isExpanded) {
+      return;
+    }
+
+    // Update the preferred caret x-offset.
+    _preferredCaretXOffset = _codeLayout.getXForCaretInCodeLine(selection.extent);
   }
 
   CodeLinesState get _codeLayout => _codeLayoutKey.currentState as CodeLinesState;
