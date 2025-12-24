@@ -22,6 +22,14 @@ class CodeDocument {
   String get text => _pieceTable.getText();
   int get length => _pieceTable.length;
 
+  String? getLine(int lineIndex) {
+    if (lineIndex < 0 || lineIndex >= lineCount) {
+      return null;
+    }
+
+    return text.substring(getLineStart(lineIndex), getLineEnd(lineIndex));
+  }
+
   // ----- START TOKENS --------
   Lexer lexer;
   List<LexerToken> _tokens = const [];
@@ -376,6 +384,9 @@ class CodeDocument {
 
   int get lineCount => _lineStarts.length;
   int getLineStart(int line) => _lineStarts[line];
+  int getLineEnd(int line) => line < lineCount - 1 //
+      ? getLineStart(line + 1) - 1 // -1 to remove the trailing newline at the end of the line.
+      : length;
 
   // ----- Undo/redo ------
   bool get canUndo => _undoStack.isNotEmpty;
@@ -514,10 +525,11 @@ class CodeDocument {
       final mid = (low + high) >> 1;
       final midVal = _lineStarts[mid];
       if (midVal == offset) return mid;
-      if (midVal < offset)
+      if (midVal < offset) {
         low = mid + 1;
-      else
+      } else {
         high = mid - 1;
+      }
     }
     return low - 1;
   }
@@ -735,16 +747,16 @@ abstract class _EditAction {
   _EditAction appendAtEnd(_EditAction actionToAppend) => throw UnsupportedError('Cannot merge actions');
 }
 
-class TextSelection {
-  TextSelection({required int start, required int end})
-      : start = start < end ? start : end,
-        end = start < end ? end : start;
-
-  final int start;
-  final int end;
-
-  bool get isCollapsed => start == end;
-}
+// class TextSelection {
+//   TextSelection({required int start, required int end})
+//       : start = start < end ? start : end,
+//         end = start < end ? end : start;
+//
+//   final int start;
+//   final int end;
+//
+//   bool get isCollapsed => start == end;
+// }
 
 abstract class LexerTokenListener {
   /// Called after tokens in the given document range changed.

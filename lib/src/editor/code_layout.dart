@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:inception/src/document/selection.dart';
 import 'package:inception/src/editor/theme.dart';
+import 'package:inception/src/infrastructure/flutter_extensions/render_box_extensions.dart';
 import 'package:super_editor/super_editor.dart';
 import 'package:super_text_layout/super_text_layout.dart';
 
@@ -18,47 +19,85 @@ class CodeLines extends StatefulWidget {
   const CodeLines({
     super.key,
     required this.codeLines,
-    this.gutterColor = lineColor,
-    required this.gutterBorderColor,
-    required this.lineBackgroundColor,
-    required this.indentLineColor,
-    required this.baseTextStyle,
     this.shadowCaretPosition,
-    this.caretPosition,
+    this.selection,
+    this.highlightedLine,
     // this.perLineOverlays = const [],
     // this.perLineUnderlays = const [],
+    required this.style,
   });
 
   /// All lines of source code, with syntax highlighting already applied.
   final List<TextSpan> codeLines;
 
-  final Color gutterColor;
-
-  final Color gutterBorderColor;
-
-  final Color lineBackgroundColor;
-
-  /// The color of little lines that appear on the upstream side of the code in the
-  /// indentation area.
-  final Color indentLineColor;
-
-  /// The base text style, applied beneath the styles in [code], and also applied to the indent line spacing.
-  final TextStyle baseTextStyle;
-
   final CodePosition? shadowCaretPosition;
 
-  final CodePosition? caretPosition;
+  final CodeSelection? selection;
+
+  final int? highlightedLine;
 
   // final List<CodeLineLayerWidgetBuilder> perLineUnderlays;
   //
   // final List<CodeLineLayerWidgetBuilder> perLineOverlays;
 
+  final CodeLinesStyle style;
+
   @override
-  State<CodeLines> createState() => _CodeLinesState();
+  State<CodeLines> createState() => CodeLinesState();
 }
 
-class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
+class CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   final _lineKeys = <int, GlobalKey>{};
+
+  CodePosition? get caretPosition => widget.selection?.extent;
+
+  @override
+  CodePosition? findPositionBefore(CodePosition position) {
+    if (position.line < 0 || position.characterOffset < 0) {
+      throw Exception(
+        "Tried to access a CodePosition ($position) but the line and/or character offset is negative, which is invalid.",
+      );
+    }
+
+    if (position.line == 0 && position.characterOffset == 0) {
+      // At the start of the document.
+      return null;
+    } else if (position.characterOffset == 0) {
+      // Move to end of line above.
+      return CodePosition(position.line - 1, widget.codeLines[position.line - 1].toPlainText().length);
+    } else {
+      // Move left one character.
+      return CodePosition(position.line, position.characterOffset - 1);
+    }
+  }
+
+  @override
+  CodePosition? findPositionAfter(CodePosition position) {
+    if (position.line > widget.codeLines.length ||
+        position.characterOffset > widget.codeLines[position.line].toPlainText().length) {
+      throw Exception(
+        "Tried to access a CodePosition ($position) that's beyond the end of the code document (${widget.codeLines.length - 1} lines, ${widget.codeLines.last.toPlainText().length} characters).",
+      );
+    }
+
+    if (position.line == widget.codeLines.length - 1 &&
+        position.characterOffset == widget.codeLines.last.toPlainText().length) {
+      // At end of the document.
+      return null;
+    } else if (position.characterOffset == widget.codeLines[position.line].toPlainText().length) {
+      // Move to start of next line.
+      return CodePosition(position.line + 1, 0);
+    } else {
+      // Move one character to the right.
+      return CodePosition(position.line, position.characterOffset + 1);
+    }
+  }
+
+  @override
+  CodePosition findEndPosition() => CodePosition(
+        widget.codeLines.length - 1,
+        widget.codeLines.last.toPlainText().length,
+      );
 
   @override
   CodeRange? findWordBoundaryAtGlobalOffset(Offset globalOffset) {
@@ -204,9 +243,39 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   }
 
   @override
+  Rect getLocalRectForCodePosition(CodePosition position) {
+    final codeLineBox = _lineKeys[position.line]!.currentContext!.findRenderObject() as RenderBox;
+    final codeLine = _lineKeys[position.line]!.asCodeLine;
+    final codeLinePositionRect = codeLine.getLocalRectForCharacter(position.characterOffset);
+
+    final codeLinesBox = context.findRenderObject() as RenderBox;
+    return codeLineBox.localRectToGlobal(codeLinePositionRect, ancestor: codeLinesBox);
+  }
+
+  @override
+  Rect getLocalRectForCaret(CodePosition position) {
+    final codeLineBox = _lineKeys[position.line]!.currentContext!.findRenderObject() as RenderBox;
+    final codeLine = _lineKeys[position.line]!.asCodeLine;
+    final codeLineCaretRect = codeLine.getLocalRectForCaret(position.characterOffset);
+
+    final codeLinesBox = context.findRenderObject() as RenderBox;
+    return codeLineBox.localRectToGlobal(codeLineCaretRect, ancestor: codeLinesBox);
+  }
+
+  @override
+  double getLocalXForCaret(CodePosition position) {
+    final codeLineBox = _lineKeys[position.line]!.currentContext!.findRenderObject() as RenderBox;
+    final codeLine = _lineKeys[position.line]!.asCodeLine;
+    final codeLineCaretX = codeLine.getLocalXForCaret(position.characterOffset);
+
+    final codeLinesBox = context.findRenderObject() as RenderBox;
+    return codeLineBox.localToGlobal(Offset(codeLineCaretX, 0), ancestor: codeLinesBox).dx;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: widget.lineBackgroundColor,
+      color: widget.style.lineBackgroundColor,
       child: MouseRegion(
         cursor: SystemMouseCursors.text,
         child: widget.codeLines.isNotEmpty
@@ -231,15 +300,15 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
   Widget _buildLineIndicator(int lineIndex) {
     return Container(
       decoration: BoxDecoration(
-        color: widget.gutterColor,
-        border: Border(right: BorderSide(color: widget.gutterBorderColor)),
+        color: widget.style.gutterColor,
+        border: Border(right: BorderSide(color: widget.style.gutterBorderColor)),
       ),
       child: Padding(
         padding: const EdgeInsets.only(right: 20),
         child: Text(
           " ${lineIndex + 1}",
           textAlign: TextAlign.right,
-          style: widget.baseTextStyle.copyWith(
+          style: widget.style.baseTextStyle.copyWith(
             color: Colors.white.withValues(alpha: 0.3),
           ),
         ),
@@ -251,19 +320,80 @@ class _CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
     _lineKeys[lineIndex] ??= GlobalKey(debugLabel: "Code line: $lineIndex");
     final key = _lineKeys[lineIndex];
 
-    return CodeLine(
-      key: key,
-      lineNumber: lineIndex,
-      code: widget.codeLines[lineIndex],
-      indentLineColor: widget.indentLineColor,
-      baseTextStyle: widget.baseTextStyle,
-      shadowCaretPosition: widget.shadowCaretPosition?.line == lineIndex
-          ? TextPosition(offset: widget.shadowCaretPosition!.characterOffset)
-          : null,
-      caretPosition:
-          widget.caretPosition?.line == lineIndex ? TextPosition(offset: widget.caretPosition!.characterOffset) : null,
+    return ColoredBox(
+      color: widget.highlightedLine == lineIndex ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
+      child: CodeLine(
+        key: key,
+        lineNumber: lineIndex,
+        code: widget.codeLines[lineIndex],
+        // TODO: Pipe style controls through to CodeLines widget
+        style: CodeLineStyle(
+          indentLineColor: widget.style.indentLineColor,
+          baseTextStyle: widget.style.baseTextStyle,
+          shadowCaretColor: Colors.grey.shade700,
+          selectionBoxColor: Colors.blueGrey,
+          caretColor: Colors.blueAccent,
+        ),
+        shadowCaretPosition: widget.shadowCaretPosition?.line == lineIndex
+            ? TextPosition(offset: widget.shadowCaretPosition!.characterOffset)
+            : null,
+        // TODO: handle non-collapsed selections.
+        selection:
+            caretPosition?.line == lineIndex ? TextSelection.collapsed(offset: caretPosition!.characterOffset) : null,
+      ),
     );
   }
+}
+
+class CodeLinesStyle {
+  // TODO: Define a default light
+
+  const CodeLinesStyle.dark()
+      : gutterColor = const Color(0xFF1E1E1E),
+        gutterBorderColor = const Color(0xFF2E2E2E),
+        lineBackgroundColor = const Color(0xFF1E1E1E),
+        indentLineColor = const Color(0xFF222222),
+        baseTextStyle = const TextStyle(color: Color(0xFFD4D4D4));
+
+  const CodeLinesStyle({
+    this.gutterColor = lineColor,
+    required this.gutterBorderColor,
+    required this.lineBackgroundColor,
+    required this.indentLineColor,
+    required this.baseTextStyle,
+  });
+
+  final Color gutterColor;
+
+  final Color gutterBorderColor;
+
+  final Color lineBackgroundColor;
+
+  /// The color of little lines that appear on the upstream side of the code in the
+  /// indentation area.
+  final Color indentLineColor;
+
+  /// The base text style, applied beneath the styles in [code], and also applied to the indent line spacing.
+  final TextStyle baseTextStyle;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CodeLinesStyle &&
+          runtimeType == other.runtimeType &&
+          gutterColor == other.gutterColor &&
+          gutterBorderColor == other.gutterBorderColor &&
+          lineBackgroundColor == other.lineBackgroundColor &&
+          indentLineColor == other.indentLineColor &&
+          baseTextStyle == other.baseTextStyle;
+
+  @override
+  int get hashCode =>
+      gutterColor.hashCode ^
+      gutterBorderColor.hashCode ^
+      lineBackgroundColor.hashCode ^
+      indentLineColor.hashCode ^
+      baseTextStyle.hashCode;
 }
 
 extension CodeLinesLayoutFromContext on GlobalKey {
@@ -275,6 +405,27 @@ extension CodeLinesLayoutFromContext on GlobalKey {
 }
 
 abstract interface class CodeLinesLayout {
+  /// Returns the [CodePosition] immediately preceding [position], or `null` if the [position]
+  /// is at the start of the code document.
+  ///
+  /// {@template code_document_convenience}
+  /// This information could be pulled from the [CodeDocument], but its implemented
+  /// in [CodeLinesLayout] for convenience for use-cases that may not have easy access
+  /// to the associated [CodeDocument].
+  /// {@endtemplate}
+  CodePosition? findPositionBefore(CodePosition position);
+
+  /// Returns the [CodePosition] immediately following [position], or `null` if the [position]
+  /// is at the end of the code document.
+  ///
+  /// {@macro code_document_convenience}
+  CodePosition? findPositionAfter(CodePosition position);
+
+  /// Returns the [CodePosition] that points to the end of the code document.
+  ///
+  /// {@macro code_document_convenience}
+  CodePosition findEndPosition();
+
   /// Returns the bounds that surround the word that appears at the given
   /// [globalOffset].
   CodeRange? findWordBoundaryAtGlobalOffset(Offset globalOffset);
@@ -288,6 +439,31 @@ abstract interface class CodeLinesLayout {
 
   /// Returns the [CodePosition] nearest to the given [localOffset].
   CodePosition findCodePositionNearestLocalOffset(Offset localOffset);
+
+  /// Returns the [Rect] that surrounds the character at the given [position].
+  Rect getLocalRectForCodePosition(CodePosition position);
+
+  /// Returns the [Rect] where the caret would appear **before** the given [position].
+  ///
+  /// The returned [Rect] is a conceptual caret - its x-offset starts either 1px before
+  /// a character, or immediately after a character, it's width is 1px, and its height is
+  /// equal to the line height.
+  ///
+  /// There is no requirement that an editor render a caret with this [Rect]. An editor
+  /// can choose to render a wider caret, taller caret, shorter caret. Rather, this [Rect]
+  /// should be thought of as a line segment between characters, and then used to calculate
+  /// any relevant information based on that.
+  Rect getLocalRectForCaret(CodePosition position);
+
+  /// Returns the x-offset where the caret would appear, if the caret were displayed at the
+  /// given [position], i.e., the x-offset between two sequential characters, or before/after
+  /// the first/last character.
+  ///
+  /// This x-offset isn't necessarily used by an editor to display the caret. An editor is free
+  /// to choose whatever offset, width, and height it desired for the caret. Rather, this x-offset
+  /// is made available for any layout calculations that want to operate between characters, instead
+  /// of within a given character.
+  double getLocalXForCaret(CodePosition position);
 
   /// Returns a list of [TextBox]es that bound the content selected in the given [codeRange],
   /// in local coordinates.
@@ -304,10 +480,9 @@ class CodeLine extends StatefulWidget {
     super.key,
     required this.lineNumber,
     required this.code,
-    required this.indentLineColor,
-    required this.baseTextStyle,
     this.shadowCaretPosition,
-    this.caretPosition,
+    this.selection,
+    required this.style,
     // this.overlays = const [],
     // this.underlays = const [],
   });
@@ -318,16 +493,11 @@ class CodeLine extends StatefulWidget {
   /// The styled code to display in this line.
   final TextSpan code;
 
-  /// The color of little lines that appear on the upstream side of the code in the
-  /// indentation area.
-  final Color indentLineColor;
-
-  /// The base text style, applied beneath the styles in [code], and also applied to the indent line spacing.
-  final TextStyle baseTextStyle;
-
   final TextPosition? shadowCaretPosition;
 
-  final TextPosition? caretPosition;
+  final TextSelection? selection;
+
+  final CodeLineStyle style;
 
 // TODO: Define a contract for CodeLineLayerWidgetBuilder, which takes in all
 //       info about a code line (including layout) and builds widgets based on it.
@@ -434,7 +604,28 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
     ).toList();
   }
 
-  // RenderParagraph get _renderParagraph => _codeTextKey.currentContext!.findRenderObject() as RenderParagraph;
+  @override
+  Rect getLocalRectForCharacter(int characterOffset) {
+    final localCharacterRect = _textLayout.getCharacterBox(TextPosition(offset: characterOffset))!.toRect();
+    final codeLineBox = context.findRenderObject() as RenderBox;
+    return _textRenderBox.localRectToGlobal(localCharacterRect, ancestor: codeLineBox);
+  }
+
+  @override
+  Rect getLocalRectForCaret(int characterOffset) {
+    final textPosition = TextPosition(offset: characterOffset);
+    final localCharacterRect =
+        _textLayout.getOffsetForCaret(textPosition) & Size(1, _textLayout.getHeightForCaret(textPosition)!);
+    final codeLineBox = context.findRenderObject() as RenderBox;
+    return _textRenderBox.localRectToGlobal(localCharacterRect, ancestor: codeLineBox);
+  }
+
+  @override
+  double getLocalXForCaret(int characterOffset) {
+    final textLayoutOffset = _textLayout.getOffsetForCaret(TextPosition(offset: characterOffset));
+    final codeLineBox = context.findRenderObject() as RenderBox;
+    return _textRenderBox.localToGlobal(textLayoutOffset, ancestor: codeLineBox).dx;
+  }
 
   RenderBox get _textRenderBox => _codeTextKey.currentContext!.findRenderObject() as RenderBox;
 
@@ -443,6 +634,105 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
 
   @override
   Widget build(BuildContext context) {
+    final caretPosition = widget.selection?.extent;
+
+    // if (widget.shadowCaretPosition != null) {
+    //   print("Line ${widget.lineNumber} has shadow caret at: ${widget.shadowCaretPosition}");
+    // }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.red),
+      ),
+      child: BoxContentLayers(
+        content: (context) => Padding(
+          // Push off from left edge, also add a little space on top and bottom so the caret
+          // doesn't go all the way to the previous/next lines.
+          padding: const EdgeInsets.only(left: 8.0, top: 2, bottom: 2),
+          child: Stack(
+            children: [
+              _buildVerticalTabLines(),
+              // Text.rich(
+              //   key: _codeTextKey,
+              //   widget.code,
+              //   style: widget.baseTextStyle,
+              // ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.blue),
+                ),
+                child: SuperText(
+                  key: _codeTextKey,
+                  richText: TextSpan(
+                    style: widget.style.baseTextStyle,
+                    children: [
+                      widget.code.toPlainText().isNotEmpty ? widget.code : const TextSpan(text: " "),
+                    ],
+                  ),
+                  layerBeneathBuilder: (context, layout) {
+                    final shadowCaretPosition = widget.shadowCaretPosition;
+
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        if (widget.selection?.isCollapsed == false) //
+                          Positioned(
+                            left: layout.getOffsetForCaret(TextPosition(offset: widget.selection!.start)).dx,
+                            // TODO: Use a CustomPainter instead of a Positioned so that we don't need to do `rightSide - endXOffset`
+                            right: layout.getOffsetForCaret(TextPosition(offset: widget.code.toPlainText().length)).dx -
+                                layout.getOffsetForCaret(TextPosition(offset: widget.selection!.end)).dx,
+                            top: 0,
+                            bottom: 0,
+                            child: ColoredBox(color: widget.style.selectionBoxColor),
+                          ),
+                        if (shadowCaretPosition != null) //
+                          Positioned(
+                            left: layout.getOffsetForCaret(shadowCaretPosition).dx,
+                            top: layout.getOffsetForCaret(shadowCaretPosition).dy,
+                            height: layout.getHeightForCaret(shadowCaretPosition),
+                            child: Container(
+                              width: 1,
+                              color: widget.style.shadowCaretColor,
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                  layerAboveBuilder: (context, layout) {
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        if (caretPosition != null) //
+                          Positioned(
+                            left: layout.getOffsetForCaret(caretPosition).dx,
+                            // FIXME: The reported SuperTextLayout y-offset when caret is at the very end of the line
+                            //        is too far down. It positions the caret dangling below the bottom of the line.
+                            // top: layout.getOffsetForCaret(caretPosition).dy,
+                            top: 0,
+                            height: layout.getHeightForCaret(caretPosition),
+                            child: Container(
+                              width: 2,
+                              color: widget.style.caretColor,
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        // underlays: widget.underlays,
+        // overlays: widget.overlays,
+        underlays: [
+          _buildShadowCaret,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerticalTabLines() {
     final buffer = StringBuffer();
     widget.code.computeToPlainText(buffer);
     final contentText = buffer.toString();
@@ -455,90 +745,30 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
       tabCount = (leadingSpaceMatch.end ~/ 2) - 1;
     }
 
-    if (widget.caretPosition != null) {
-      print("Line ${widget.lineNumber} has caret at: ${widget.caretPosition}");
-    }
-
-    // if (widget.shadowCaretPosition != null) {
-    //   print("Line ${widget.lineNumber} has shadow caret at: ${widget.shadowCaretPosition}");
-    // }
-
-    return BoxContentLayers(
-      content: (context) => Padding(
-        padding: const EdgeInsets.only(left: 8.0),
-        child: Stack(
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (int i = 0; i < tabCount; i += 1) //
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: BorderSide(
-                          color: widget.indentLineColor,
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: Text(
-                      "  ",
-                      style: widget.baseTextStyle,
-                    ),
+    return Positioned(
+      top: 0,
+      bottom: 0,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (int i = 0; i < tabCount; i += 1) //
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(
+                    color: widget.style.indentLineColor,
+                    width: 1,
                   ),
-              ],
-            ),
-            // Text.rich(
-            //   key: _codeTextKey,
-            //   widget.code,
-            //   style: widget.baseTextStyle,
-            // ),
-            SuperText(
-              key: _codeTextKey,
-              richText: TextSpan(
-                style: widget.baseTextStyle,
-                children: [widget.code],
+                ),
               ),
-              layerBeneathBuilder: (context, layout) {
-                final shadowCaretPosition = widget.shadowCaretPosition;
-                final caretPosition = widget.caretPosition;
-
-                return Stack(
-                  children: [
-                    if (shadowCaretPosition != null) //
-                      Positioned(
-                        left: layout.getOffsetForCaret(shadowCaretPosition).dx,
-                        top: layout.getOffsetForCaret(shadowCaretPosition).dy,
-                        height: layout.getHeightForCaret(shadowCaretPosition),
-                        child: Container(
-                          width: 1,
-                          // height: 20,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    if (caretPosition != null) //
-                      Positioned(
-                        left: layout.getOffsetForCaret(caretPosition).dx,
-                        top: layout.getOffsetForCaret(caretPosition).dy,
-                        height: layout.getHeightForCaret(caretPosition),
-                        child: Container(
-                          width: 2,
-                          color: Colors.lightBlue,
-                        ),
-                      ),
-                  ],
-                );
-              },
+              child: Text(
+                "  ",
+                style: widget.style.baseTextStyle,
+              ),
             ),
-          ],
-        ),
+        ],
       ),
-      // underlays: widget.underlays,
-      // overlays: widget.overlays,
-      underlays: [
-        _buildShadowCaret,
-      ],
     );
   }
 
@@ -560,6 +790,28 @@ class _ShadowCaretContentLayer extends ContentLayerStatelessWidget {
 
     return const EmptyContentLayer();
   }
+}
+
+class CodeLineStyle {
+  const CodeLineStyle({
+    required this.baseTextStyle,
+    required this.indentLineColor,
+    required this.shadowCaretColor,
+    required this.selectionBoxColor,
+    required this.caretColor,
+  });
+
+  /// The base text style, applied beneath the styles in [code], and also applied to the indent line spacing.
+  final TextStyle baseTextStyle;
+
+  /// The color of the vertical lines that are drawn at every tab-level indent on a line.
+  final Color indentLineColor;
+
+  final Color selectionBoxColor;
+
+  final Color shadowCaretColor;
+
+  final Color caretColor;
 }
 
 class CodeScroller extends TwoDimensionalScrollView {
@@ -860,6 +1112,31 @@ abstract interface class CodeLineLayout {
 
   /// Returns the [CodePosition] nearest to the given [localOffset].
   CodePosition findCodePositionNearestLocalOffset(Offset localOffset);
+
+  /// Returns the [Rect] that surrounds the character at the given [characterOffset].
+  Rect getLocalRectForCharacter(int characterOffset);
+
+  /// Returns the [Rect] where the caret would appear **before** the given [characterOffset].
+  ///
+  /// The returned [Rect] is a conceptual caret - its x-offset starts either 1px before
+  /// a character, or immediately after a character, it's width is 1px, and its height is
+  /// equal to the line height.
+  ///
+  /// There is no requirement that an editor render a caret with this [Rect]. An editor
+  /// can choose to render a wider caret, taller caret, shorter caret. Rather, this [Rect]
+  /// should be thought of as a line segment between characters, and then used to calculate
+  /// any relevant information based on that.
+  Rect getLocalRectForCaret(int characterOffset);
+
+  /// Returns the x-offset where the caret would appear, if the caret were displayed at the
+  /// given [characterOffset], i.e., the x-offset between two sequential characters, or before/after
+  /// the first/last character.
+  ///
+  /// This x-offset isn't necessarily used by an editor to display the caret. An editor is free
+  /// to choose whatever offset, width, and height it desired for the caret. Rather, this x-offset
+  /// is made available for any layout calculations that want to operate between characters, instead
+  /// of within a given character.
+  double getLocalXForCaret(int characterOffset);
 
   /// Returns a list of [TextBox]es that bound the given [selection],
   /// in local coordinates.

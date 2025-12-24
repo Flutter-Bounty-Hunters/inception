@@ -414,12 +414,14 @@ class _IdeEditorState extends State<IdeEditor> {
                         child: CodeLines(
                           key: _linesKey,
                           codeLines: _styledLines,
-                          // TODO: pick a real background color
-                          lineBackgroundColor: Colors.transparent,
-                          // TODO: pick a real background color
-                          gutterBorderColor: Colors.transparent,
-                          indentLineColor: indentLineColor,
-                          baseTextStyle: _baseCodeStyle,
+                          style: const CodeLinesStyle(
+                            // TODO: pick a real background color
+                            lineBackgroundColor: Colors.transparent,
+                            // TODO: pick a real background color
+                            gutterBorderColor: Colors.transparent,
+                            indentLineColor: indentLineColor,
+                            baseTextStyle: _baseCodeStyle,
+                          ),
                         ),
                       ),
                     ),

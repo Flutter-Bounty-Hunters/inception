@@ -1,6 +1,10 @@
 import 'dart:ui';
 
 class CodeSelection {
+  const CodeSelection.collapsed(CodePosition position)
+      : base = position,
+        extent = position;
+
   const CodeSelection({
     required this.base,
     required this.extent,
@@ -8,6 +12,10 @@ class CodeSelection {
 
   final CodePosition base;
   final CodePosition extent;
+
+  bool get isCollapsed => base == extent;
+
+  bool get isExpanded => base != extent;
 
   CodeRange toRange() {
     final affinity = extent.line > base.line || extent.characterOffset >= base.characterOffset
@@ -40,6 +48,8 @@ class CodeRange {
 }
 
 class CodePosition implements Comparable<CodePosition> {
+  static const start = CodePosition(0, 0);
+
   const CodePosition(this.line, this.characterOffset);
 
   final int line;
@@ -72,4 +82,15 @@ class CodePosition implements Comparable<CodePosition> {
 
   @override
   String toString() => "(line: $line, offset: $characterOffset)";
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CodePosition &&
+          runtimeType == other.runtimeType &&
+          line == other.line &&
+          characterOffset == other.characterOffset;
+
+  @override
+  int get hashCode => line.hashCode ^ characterOffset.hashCode;
 }

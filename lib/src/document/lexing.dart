@@ -50,6 +50,7 @@ enum SyntaxKind {
   string,
   number,
   comment,
+  controlFlow,
   operatorToken,
   punctuation,
   whitespace,
