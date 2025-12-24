@@ -93,46 +93,34 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
-  int? _hoveredLine;
-  void _onPointerHover(PointerHoverEvent event) {
-    final hoverCodePosition = _codeLayout.findCodePositionNearestGlobalOffset(event.position);
-    setState(() {
-      _hoveredLine = hoverCodePosition.line;
-    });
-  }
-
   CodeLinesState get _codeLayout => _codeLayoutKey.currentState as CodeLinesState;
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerHover: _onPointerHover,
-      child: GestureDetector(
-        onTapDown: _onTapDown,
-        child: Focus(
-          focusNode: _focusNode,
-          onKeyEvent: _onKeyEvent,
-          child: ListenableBuilder(
-            listenable: Listenable.merge([
-              widget.presenter.codeLines,
-              widget.presenter.selection,
-            ]),
-            builder: (context, child) {
-              return CodeLines(
-                key: _codeLayoutKey,
-                codeLines: widget.presenter.codeLines.value,
-                selection: widget.presenter.selection.value,
-                highlightedLine: _hoveredLine,
-                style: CodeLinesStyle(
-                  gutterColor: widget.style.gutterColor,
-                  gutterBorderColor: widget.style.gutterBorderColor,
-                  lineBackgroundColor: widget.style.lineBackgroundColor,
-                  indentLineColor: widget.style.indentLineColor,
-                  baseTextStyle: widget.style.baseTextStyle,
-                ),
-              );
-            },
-          ),
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      child: Focus(
+        focusNode: _focusNode,
+        onKeyEvent: _onKeyEvent,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([
+            widget.presenter.codeLines,
+            widget.presenter.selection,
+          ]),
+          builder: (context, child) {
+            return CodeLines(
+              key: _codeLayoutKey,
+              codeLines: widget.presenter.codeLines.value,
+              selection: widget.presenter.selection.value,
+              style: CodeLinesStyle(
+                gutterColor: widget.style.gutterColor,
+                gutterBorderColor: widget.style.gutterBorderColor,
+                lineBackgroundColor: widget.style.lineBackgroundColor,
+                indentLineColor: widget.style.indentLineColor,
+                baseTextStyle: widget.style.baseTextStyle,
+              ),
+            );
+          },
         ),
       ),
     );

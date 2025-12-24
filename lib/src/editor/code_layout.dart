@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:inception/src/document/selection.dart';
 import 'package:inception/src/editor/theme.dart';
+import 'package:inception/src/infrastructure/flutter_extensions/border_box.dart';
 import 'package:inception/src/infrastructure/flutter_extensions/render_box_extensions.dart';
 import 'package:super_editor/super_editor.dart';
 import 'package:super_text_layout/super_text_layout.dart';
@@ -21,7 +22,6 @@ class CodeLines extends StatefulWidget {
     required this.codeLines,
     this.shadowCaretPosition,
     this.selection,
-    this.highlightedLine,
     // this.perLineOverlays = const [],
     // this.perLineUnderlays = const [],
     required this.style,
@@ -33,8 +33,6 @@ class CodeLines extends StatefulWidget {
   final CodePosition? shadowCaretPosition;
 
   final CodeSelection? selection;
-
-  final int? highlightedLine;
 
   // final List<CodeLineLayerWidgetBuilder> perLineUnderlays;
   //
@@ -320,27 +318,24 @@ class CodeLinesState extends State<CodeLines> implements CodeLinesLayout {
     _lineKeys[lineIndex] ??= GlobalKey(debugLabel: "Code line: $lineIndex");
     final key = _lineKeys[lineIndex];
 
-    return ColoredBox(
-      color: widget.highlightedLine == lineIndex ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
-      child: CodeLine(
-        key: key,
-        lineNumber: lineIndex,
-        code: widget.codeLines[lineIndex],
-        // TODO: Pipe style controls through to CodeLines widget
-        style: CodeLineStyle(
-          indentLineColor: widget.style.indentLineColor,
-          baseTextStyle: widget.style.baseTextStyle,
-          shadowCaretColor: Colors.grey.shade700,
-          selectionBoxColor: Colors.blueGrey,
-          caretColor: Colors.blueAccent,
-        ),
-        shadowCaretPosition: widget.shadowCaretPosition?.line == lineIndex
-            ? TextPosition(offset: widget.shadowCaretPosition!.characterOffset)
-            : null,
-        // TODO: handle non-collapsed selections.
-        selection:
-            caretPosition?.line == lineIndex ? TextSelection.collapsed(offset: caretPosition!.characterOffset) : null,
+    return CodeLine(
+      key: key,
+      lineNumber: lineIndex,
+      code: widget.codeLines[lineIndex],
+      // TODO: Pipe style controls through to CodeLines widget
+      style: CodeLineStyle(
+        indentLineColor: widget.style.indentLineColor,
+        baseTextStyle: widget.style.baseTextStyle,
+        shadowCaretColor: Colors.grey.shade700,
+        selectionBoxColor: Colors.blueGrey,
+        caretColor: Colors.blueAccent,
       ),
+      shadowCaretPosition: widget.shadowCaretPosition?.line == lineIndex
+          ? TextPosition(offset: widget.shadowCaretPosition!.characterOffset)
+          : null,
+      // TODO: handle non-collapsed selections.
+      selection:
+          caretPosition?.line == lineIndex ? TextSelection.collapsed(offset: caretPosition!.characterOffset) : null,
     );
   }
 }
@@ -485,6 +480,7 @@ class CodeLine extends StatefulWidget {
     required this.style,
     // this.overlays = const [],
     // this.underlays = const [],
+    this.debugPaint = CodeLineDebugPaint.empty,
   });
 
   /// Line number for this line within its overall source file, starting at zero.
@@ -504,6 +500,8 @@ class CodeLine extends StatefulWidget {
   // final List<CodeLineLayerWidgetBuilder> underlays;
   //
   // final List<CodeLineLayerWidgetBuilder> overlays;
+
+  final CodeLineDebugPaint debugPaint;
 
   @override
   State<CodeLine> createState() => _CodeLineState();
@@ -640,34 +638,30 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
     //   print("Line ${widget.lineNumber} has shadow caret at: ${widget.shadowCaretPosition}");
     // }
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.red),
-      ),
+    return BorderBox(
+      color: widget.debugPaint.lineBoundaryColor,
+      isEnabled: widget.debugPaint.lineBoundaryColor != null,
       child: BoxContentLayers(
-        content: (context) => Padding(
-          // Push off from left edge, also add a little space on top and bottom so the caret
-          // doesn't go all the way to the previous/next lines.
-          padding: const EdgeInsets.only(left: 8.0, top: 2, bottom: 2),
-          child: Stack(
-            children: [
-              _buildVerticalTabLines(),
-              // Text.rich(
-              //   key: _codeTextKey,
-              //   widget.code,
-              //   style: widget.baseTextStyle,
-              // ),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.blue),
-                ),
+        content: (context) => Stack(
+          children: [
+            _buildVerticalTabLines(),
+            // Text.rich(
+            //   key: _codeTextKey,
+            //   widget.code,
+            //   style: widget.baseTextStyle,
+            // ),
+            BorderBox(
+              color: widget.debugPaint.textBoundaryColor,
+              isEnabled: widget.debugPaint.textBoundaryColor != null,
+              child: Padding(
+                // Push off from left edge, also add a little space on top and bottom so the caret
+                // doesn't go all the way to the previous/next lines.
+                padding: const EdgeInsets.only(left: 8.0, top: 2, bottom: 2),
                 child: SuperText(
                   key: _codeTextKey,
                   richText: TextSpan(
                     style: widget.style.baseTextStyle,
-                    children: [
-                      widget.code.toPlainText().isNotEmpty ? widget.code : const TextSpan(text: " "),
-                    ],
+                    children: [widget.code],
                   ),
                   layerBeneathBuilder: (context, layout) {
                     final shadowCaretPosition = widget.shadowCaretPosition;
@@ -720,8 +714,8 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
                   },
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
         // underlays: widget.underlays,
         // overlays: widget.overlays,
@@ -775,6 +769,28 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
   ContentLayerWidget _buildShadowCaret(BuildContext context) {
     return _ShadowCaretContentLayer(widget.shadowCaretPosition);
   }
+}
+
+class CodeLineDebugPaint {
+  static const empty = CodeLineDebugPaint();
+
+  const CodeLineDebugPaint({
+    this.lineBoundaryColor,
+    this.textBoundaryColor,
+  });
+
+  /// The color of a debug border that's painted around the entire code portion
+  /// of a line (the part to the right of the gutter), or `null` if no debug paint
+  /// is desired.
+  final Color? lineBoundaryColor;
+
+  /// The color of a debug border that's painted around the bounding box of the text
+  /// in the code portion of a line (the part to the right of the gutter), or `null` if
+  /// no debug paint is desired.
+  ///
+  /// This boundary is typically very similar to [lineBoundaryColor], but may have some
+  /// differences.
+  final Color? textBoundaryColor;
 }
 
 class _ShadowCaretContentLayer extends ContentLayerStatelessWidget {
