@@ -2,11 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:example/ide/editor/code_layout.dart';
 import 'package:example/ide/editor/syntax_highlighting.dart';
 import 'package:example/ide/infrastructure/keyboard_shortcuts.dart';
 import 'package:example/ide/infrastructure/popover_list.dart';
-import 'package:example/ide/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:follow_the_leader/follow_the_leader.dart';
@@ -416,8 +414,14 @@ class _IdeEditorState extends State<IdeEditor> {
                         child: CodeLines(
                           key: _linesKey,
                           codeLines: _styledLines,
-                          indentLineColor: indentLineColor,
-                          baseTextStyle: _baseCodeStyle,
+                          style: const CodeLinesStyle(
+                            // TODO: pick a real background color
+                            lineBackgroundColor: Colors.transparent,
+                            // TODO: pick a real background color
+                            gutterBorderColor: Colors.transparent,
+                            indentLineColor: indentLineColor,
+                            baseTextStyle: _baseCodeStyle,
+                          ),
                         ),
                       ),
                     ),

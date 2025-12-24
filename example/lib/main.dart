@@ -52,6 +52,12 @@ class _ScreenState extends State<_Screen> {
       setupNotifier.value = SetupState.noValidDirectory;
       return;
     }
+
+    final directory = Directory(path);
+    if (!directory.existsSync()) {
+      path = "/Users/admin/Projects/kalua";
+    }
+
     settings.setContentDirectory(path);
     _workspace = Workspace(
       Directory(path),

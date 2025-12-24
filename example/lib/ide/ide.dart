@@ -3,16 +3,12 @@ import 'dart:io';
 import 'package:example/ide/editor/editor.dart';
 import 'package:example/ide/file_explorer/file_explorer.dart';
 import 'package:example/ide/infrastructure/controls/toolbar_buttons.dart';
-import 'package:example/ide/infrastructure/user_settings.dart';
 import 'package:example/ide/problems_panel/problems_panel.dart';
 import 'package:example/ide/testing/test_panel.dart';
-import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:inception/inception.dart';
-
-import 'package:path/path.dart' as path;
 
 class IDE extends StatefulWidget {
   const IDE({

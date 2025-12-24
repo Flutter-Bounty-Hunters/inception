@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:inception/inception.dart';
 import 'package:path/path.dart' as path;
 import 'package:super_editor/super_editor.dart';
 import 'package:two_dimensional_scrollables/two_dimensional_scrollables.dart';
@@ -12,7 +13,6 @@ import 'package:example/ide/testing/flutter_test_notifications.dart';
 import 'package:example/ide/testing/flutter_test_runner.dart';
 import 'package:example/ide/testing/test_discoverer.dart';
 import 'package:example/ide/testing/test_node.dart';
-import 'package:example/ide/theme.dart';
 import 'package:example/ide/workspace.dart';
 
 /// A panel that displays the a tree of tests and allows the user to run tests.

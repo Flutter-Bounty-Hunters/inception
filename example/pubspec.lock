@@ -742,15 +742,6 @@ packages:
       url: "https://github.com/superlistapp/super_editor.git"
     source: git
     version: "0.3.0-dev.45"
-  super_editor_markdown:
-    dependency: "direct main"
-    description:
-      path: super_editor_markdown
-      ref: HEAD
-      resolved-ref: "4f56d6e3348c2bd1d577b690a79e47db05020155"
-      url: "https://github.com/superlistapp/super_editor.git"
-    source: git
-    version: "0.2.2"
   super_keyboard:
     dependency: transitive
     description:
