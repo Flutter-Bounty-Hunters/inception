@@ -9,7 +9,7 @@ void main() {
       final doc = CodeDocument(FakeLexer(), '');
       expect(doc.length, 0);
       expect(doc.text, '');
-      expect(doc.offsetToLineColumn(0), (0, 0));
+      expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
       expect(doc.lineColumnToOffset(0, 0), 0);
     });
 
@@ -17,8 +17,8 @@ void main() {
       final doc = CodeDocument(FakeLexer(), 'hello');
       expect(doc.length, 5);
       expect(doc.text, 'hello');
-      expect(doc.offsetToLineColumn(0), (0, 0));
-      expect(doc.offsetToLineColumn(4), (0, 4));
+      expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
+      expect(doc.offsetToCodePosition(4), const CodePosition(0, 4));
       expect(doc.lineColumnToOffset(0, 2), 2);
     });
 
@@ -28,11 +28,11 @@ void main() {
       //bb\n
       //ccc
       expect(doc.length, 8);
-      expect(doc.offsetToLineColumn(0), (0, 0));
-      expect(doc.offsetToLineColumn(1), (0, 1)); // '\n'
-      expect(doc.offsetToLineColumn(2), (1, 0));
-      expect(doc.offsetToLineColumn(3), (1, 1));
-      expect(doc.offsetToLineColumn(5), (2, 0));
+      expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
+      expect(doc.offsetToCodePosition(1), const CodePosition(0, 1)); // '\n'
+      expect(doc.offsetToCodePosition(2), const CodePosition(1, 0));
+      expect(doc.offsetToCodePosition(3), const CodePosition(1, 1));
+      expect(doc.offsetToCodePosition(5), const CodePosition(2, 0));
     });
   });
 
@@ -44,14 +44,14 @@ void main() {
       doc.insert(0, 'abc');
       expect(doc.text, 'abc');
       expect(doc.length, 3);
-      expect(doc.offsetToLineColumn(2), (0, 2));
+      expect(doc.offsetToCodePosition(2), const CodePosition(0, 2));
     });
 
     test('insert at beginning', () {
       final doc = CodeDocument(FakeLexer(), 'world');
       doc.insert(0, 'hello ');
       expect(doc.text, 'hello world');
-      expect(doc.offsetToLineColumn(6), (0, 6));
+      expect(doc.offsetToCodePosition(6), const CodePosition(0, 6));
     });
 
     test('insert in middle of piece', () {
@@ -59,8 +59,8 @@ void main() {
       doc.insert(3, 'XYZ');
       expect(doc.text, 'abcXYZdef');
       expect(doc.length, 9);
-      expect(doc.offsetToLineColumn(3), (0, 3));
-      expect(doc.offsetToLineColumn(4), (0, 4));
+      expect(doc.offsetToCodePosition(3), const CodePosition(0, 3));
+      expect(doc.offsetToCodePosition(4), const CodePosition(0, 4));
     });
 
     test('insert at end', () {
@@ -74,8 +74,8 @@ void main() {
       final doc = CodeDocument(FakeLexer(), 'hello');
       doc.insert(5, '\nworld');
       expect(doc.text, 'hello\nworld');
-      expect(doc.offsetToLineColumn(6), (1, 0));
-      expect(doc.offsetToLineColumn(10), (1, 4));
+      expect(doc.offsetToCodePosition(6), const CodePosition(1, 0));
+      expect(doc.offsetToCodePosition(10), const CodePosition(1, 4));
     });
   });
 
@@ -93,7 +93,7 @@ void main() {
       doc.delete(offset: 2, count: 3); // remove cde
       expect(doc.text, 'abf');
       expect(doc.length, 3);
-      expect(doc.offsetToLineColumn(2), (0, 2));
+      expect(doc.offsetToCodePosition(2), const CodePosition(0, 2));
     });
 
     test('delete across piece boundaries', () {
@@ -108,14 +108,14 @@ void main() {
       final doc = CodeDocument(FakeLexer(), 'hello\nworld');
       doc.delete(offset: 5, count: 1); // remove the '\n'
       expect(doc.text, 'helloworld');
-      expect(doc.offsetToLineColumn(7), (0, 7)); // now single line
+      expect(doc.offsetToCodePosition(7), const CodePosition(0, 7)); // now single line
     });
 
     test('delete entire document', () {
       final doc = CodeDocument(FakeLexer(), 'abc\ndef');
       doc.delete(offset: 0, count: doc.length);
       expect(doc.text, '');
-      expect(doc.offsetToLineColumn(0), (0, 0));
+      expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
     });
   });
 
@@ -130,7 +130,7 @@ void main() {
       doc.insert(6, '???'); // hello!???world
 
       expect(doc.text, 'hello!???world');
-      expect(doc.offsetToLineColumn(8), (0, 8));
+      expect(doc.offsetToCodePosition(8), const CodePosition(0, 8));
     });
 
     test('multiple newlines inserted and deleted', () {
@@ -138,8 +138,8 @@ void main() {
       doc.insert(1, '\nb\nc\nd'); // a\nb\nc\nd
       doc.delete(offset: 2, count: 4); // remove 'b\nc\n'
       expect(doc.text, 'a\nd');
-      expect(doc.offsetToLineColumn(2), (1, 0));
-      expect(doc.offsetToLineColumn(3), (1, 1));
+      expect(doc.offsetToCodePosition(2), const CodePosition(1, 0));
+      expect(doc.offsetToCodePosition(3), const CodePosition(1, 1));
     });
   });
 
@@ -150,8 +150,8 @@ void main() {
       final doc = CodeDocument(FakeLexer(), 'abc\ndef\n12345');
 
       for (int offset = 0; offset < doc.length; offset++) {
-        final (line, col) = doc.offsetToLineColumn(offset);
-        final roundTrip = doc.lineColumnToOffset(line, col);
+        final codePosition = doc.offsetToCodePosition(offset);
+        final roundTrip = doc.lineColumnToOffset(codePosition.line, codePosition.characterOffset);
         expect(roundTrip, offset);
       }
     });
@@ -159,11 +159,11 @@ void main() {
     test('mapping at line boundaries', () {
       final doc = CodeDocument(FakeLexer(), 'a\nbb\nccc');
 
-      expect(doc.offsetToLineColumn(0), (0, 0));
-      expect(doc.offsetToLineColumn(1), (0, 1));
-      expect(doc.offsetToLineColumn(2), (1, 0));
-      expect(doc.offsetToLineColumn(4), (1, 2));
-      expect(doc.offsetToLineColumn(5), (2, 0));
+      expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
+      expect(doc.offsetToCodePosition(1), const CodePosition(0, 1));
+      expect(doc.offsetToCodePosition(2), const CodePosition(1, 0));
+      expect(doc.offsetToCodePosition(4), const CodePosition(1, 2));
+      expect(doc.offsetToCodePosition(5), const CodePosition(2, 0));
     });
   });
 }

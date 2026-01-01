@@ -215,7 +215,7 @@ class _IdeEditorState extends State<IdeEditor> {
 
     final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(event.localPosition);
     final codeLines = _linesKey.asCodeLines;
-    final hoverPosition = codeLines.findCodePositionNearestGlobalOffset(globalOffset);
+    final hoverPosition = codeLines.findCodePositionNearestGlobalOffset(globalOffset).$1;
 
     final hoverWordRange = codeLines.findWordBoundaryAtGlobalOffset(globalOffset);
     if (hoverWordRange == null) {
@@ -285,7 +285,7 @@ class _IdeEditorState extends State<IdeEditor> {
     }
 
     final codeLines = _linesKey.asCodeLines;
-    final codePosition = codeLines.findCodePositionNearestGlobalOffset(details.globalPosition);
+    final codePosition = codeLines.findCodePositionNearestGlobalOffset(details.globalPosition).$1;
 
     _currentSelectedPosition = Position(
       line: codePosition.line,

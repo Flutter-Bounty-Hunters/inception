@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:inception/inception.dart';
@@ -41,9 +42,9 @@ class _CodeEditorState extends State<CodeEditor> {
     super.dispose();
   }
 
-  void _onTapDown(TapDownDetails details) {
+  void _onClickDown(TapDownDetails details) {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
-    final codeTapPosition = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
+    final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
 
     widget.presenter.selection.value = CodeSelection.collapsed(codeTapPosition);
 
@@ -51,6 +52,52 @@ class _CodeEditorState extends State<CodeEditor> {
 
     // Ensure the editor has focus, now that the user has clicked it.
     _focusNode.requestFocus();
+
+    // Optimistically set the drag start position, assuming this is a drag.
+    _dragStartPosition = codeTapPosition;
+  }
+
+  void _onDoubleClickDown(TapDownDetails details) {
+    final codeLayout = _codeLayoutKey.currentState as CodeLayout;
+    final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
+
+    widget.presenter.onDoubleClickAt(codeTapPosition, affinity);
+  }
+
+  void _onTripleClickDown(TapDownDetails details) {
+    // TODO:
+  }
+
+  CodePosition? _dragStartPosition;
+
+  void _onPanStart(DragStartDetails details) {
+    if (_dragStartPosition == null) {
+      // Ideally, the drag start position is set on tap down, but it seems that in some situations
+      // a pan will start without first running a tap down call. We handle that here.
+      final codeLayout = _codeLayoutKey.currentState as CodeLayout;
+      _dragStartPosition = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition).$1;
+
+      // Ensure the editor has focus, now that the user has clicked it.
+      _focusNode.requestFocus();
+    }
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    final codeLayout = _codeLayoutKey.currentState as CodeLayout;
+    final newExtent = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition).$1;
+
+    // print("New extent: $newExtent");
+    widget.presenter.selection.value = CodeSelection(base: _dragStartPosition!, extent: newExtent);
+
+    _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    _dragStartPosition = null;
+  }
+
+  void _onPanCancel() {
+    _dragStartPosition = null;
   }
 
   KeyEventResult _onKeyEvent(FocusNode _, KeyEvent keyEvent) {
@@ -60,42 +107,60 @@ class _CodeEditorState extends State<CodeEditor> {
     }
 
     switch (keyEvent.logicalKey) {
-      case LogicalKeyboardKey.arrowRight:
-        final selection = widget.presenter.selection.value;
-        if (selection == null) {
-          return KeyEventResult.ignored;
+      case LogicalKeyboardKey.keyA:
+        if (HardwareKeyboard.instance.isMetaPressed) {
+          widget.presenter.selection.value = CodeSelection(
+            base: CodePosition.start,
+            // FIXME: Pipe the CodeDocument through instead of using text spans for length
+            extent: CodePosition(
+              widget.presenter.codeLines.value.length - 1,
+              widget.presenter.codeLines.value.last.toPlainText().length,
+            ),
+          );
+          return KeyEventResult.handled;
         }
 
-        if (selection.isCollapsed) {
-          final nextPosition = _codeLayout.findPositionAfter(selection.extent);
-          if (nextPosition != null) {
-            // Move the caret to the next position.
-            widget.presenter.selection.value = CodeSelection.collapsed(nextPosition);
-
-            _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
-          }
-        } else {
-          // TODO: Handle expanded selection
-        }
-
-        return KeyEventResult.handled;
+        return KeyEventResult.ignored;
       case LogicalKeyboardKey.arrowLeft:
         final selection = widget.presenter.selection.value;
         if (selection == null) {
           return KeyEventResult.ignored;
         }
 
-        if (selection.isCollapsed) {
-          final nextPosition = _codeLayout.findPositionBefore(selection.extent);
-          if (nextPosition != null) {
-            // Move the caret to the next position.
-            widget.presenter.selection.value = CodeSelection.collapsed(nextPosition);
-
-            _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
-          }
+        if (selection.isCollapsed && !HardwareKeyboard.instance.isShiftPressed) {
+          _pushCaretInDirection(_SelectionDirection.left);
+        } else if (selection.isExpanded && !HardwareKeyboard.instance.isShiftPressed) {
+          // The selection is expanded but shift isn't pressed. Instead of moving the
+          // caret, just collapse the selection at the left/top.
+          _collapseSelectionInDirection(_SelectionDirection.left);
         } else {
-          // TODO: Handle expanded selection
+          // The selection might be collapsed or expanded, but we know the SHIFT key is
+          // pressed, so we want to expand the selection either way.
+          _expandSelectionInDirection(_SelectionDirection.left);
         }
+
+        _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
+
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowRight:
+        final selection = widget.presenter.selection.value;
+        if (selection == null) {
+          return KeyEventResult.ignored;
+        }
+
+        if (selection.isCollapsed && !HardwareKeyboard.instance.isShiftPressed) {
+          _pushCaretInDirection(_SelectionDirection.right);
+        } else if (selection.isExpanded && !HardwareKeyboard.instance.isShiftPressed) {
+          // The selection is expanded but shift isn't pressed. Instead of moving the
+          // caret, just collapse the selection at the right/bottom.
+          _collapseSelectionInDirection(_SelectionDirection.right);
+        } else {
+          // The selection might be collapsed or expanded, but we know the SHIFT key is
+          // pressed, so we want to expand the selection either way.
+          _expandSelectionInDirection(_SelectionDirection.right);
+        }
+
+        _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
 
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowUp:
@@ -104,17 +169,16 @@ class _CodeEditorState extends State<CodeEditor> {
           return KeyEventResult.ignored;
         }
 
-        if (selection.isCollapsed) {
-          final positionAbove = _codeLayout.findPositionInLineAbove(
-            selection.extent,
-            preferredXOffset: _preferredCaretXOffset,
-          );
-          if (positionAbove != null) {
-            // Move the caret to the line above.
-            widget.presenter.selection.value = CodeSelection.collapsed(positionAbove);
-          }
+        if (selection.isCollapsed && !HardwareKeyboard.instance.isShiftPressed) {
+          _pushCaretInDirection(_SelectionDirection.up);
+        } else if (selection.isExpanded && !HardwareKeyboard.instance.isShiftPressed) {
+          // The selection is expanded but shift isn't pressed. Instead of moving the
+          // caret, just collapse the selection at the top/left.
+          _collapseSelectionInDirection(_SelectionDirection.up);
         } else {
-          // TODO: Handle expanded selection
+          // The selection might be collapsed or expanded, but we know the SHIFT key is
+          // pressed, so we want to expand the selection either way.
+          _expandSelectionInDirection(_SelectionDirection.up);
         }
 
         return KeyEventResult.handled;
@@ -124,17 +188,16 @@ class _CodeEditorState extends State<CodeEditor> {
           return KeyEventResult.ignored;
         }
 
-        if (selection.isCollapsed) {
-          final positionAbove = _codeLayout.findPositionInLineBelow(
-            selection.extent,
-            preferredXOffset: _preferredCaretXOffset,
-          );
-          if (positionAbove != null) {
-            // Move the caret to the line below.
-            widget.presenter.selection.value = CodeSelection.collapsed(positionAbove);
-          }
+        if (selection.isCollapsed && !HardwareKeyboard.instance.isShiftPressed) {
+          _pushCaretInDirection(_SelectionDirection.down);
+        } else if (selection.isExpanded && !HardwareKeyboard.instance.isShiftPressed) {
+          // The selection is expanded but shift isn't pressed. Instead of moving the
+          // caret, just collapse the selection at the bottom/end.
+          _collapseSelectionInDirection(_SelectionDirection.down);
         } else {
-          // TODO: Handle expanded selection
+          // The selection might be collapsed or expanded, but we know the SHIFT key is
+          // pressed, so we want to expand the selection either way.
+          _expandSelectionInDirection(_SelectionDirection.down);
         }
 
         return KeyEventResult.handled;
@@ -143,9 +206,77 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
+  void _pushCaretInDirection(_SelectionDirection direction) {
+    final selection = widget.presenter.selection.value;
+    if (selection == null) {
+      return;
+    }
+
+    final newPosition = switch (direction) {
+      _SelectionDirection.left => _codeLayout.findPositionBefore(selection.extent),
+      _SelectionDirection.right => _codeLayout.findPositionAfter(selection.extent),
+      _SelectionDirection.up => _codeLayout.findPositionInLineAbove(
+          selection.extent,
+          preferredXOffset: _preferredCaretXOffset,
+        ),
+      _SelectionDirection.down => _codeLayout.findPositionInLineBelow(
+          selection.extent,
+          preferredXOffset: _preferredCaretXOffset,
+        ),
+    };
+
+    if (newPosition != null) {
+      // Move the caret to the new position.
+      widget.presenter.selection.value = CodeSelection.collapsed(newPosition);
+    }
+  }
+
+  void _expandSelectionInDirection(_SelectionDirection direction) {
+    final selection = widget.presenter.selection.value;
+    if (selection == null) {
+      return;
+    }
+
+    // The selection might be collapsed or expanded, but we know the SHIFT key is
+    // pressed, so we want to expand the selection either way.
+    final newExtent = switch (direction) {
+      _SelectionDirection.left => _codeLayout.findPositionBefore(selection.extent),
+      _SelectionDirection.right => _codeLayout.findPositionAfter(selection.extent),
+      _SelectionDirection.up => _codeLayout.findPositionInLineAbove(
+          selection.extent,
+          preferredXOffset: _preferredCaretXOffset,
+        ),
+      _SelectionDirection.down => _codeLayout.findPositionInLineBelow(
+          selection.extent,
+          preferredXOffset: _preferredCaretXOffset,
+        ),
+    };
+
+    if (newExtent != null) {
+      // Move the extent to the new position.
+      widget.presenter.selection.value = CodeSelection(base: selection.base, extent: newExtent);
+    }
+  }
+
+  void _collapseSelectionInDirection(_SelectionDirection direction) {
+    final selection = widget.presenter.selection.value;
+    if (selection == null) {
+      return;
+    }
+
+    final collapsedPosition = switch (direction) {
+      _SelectionDirection.left => selection.start,
+      _SelectionDirection.up => selection.start,
+      _SelectionDirection.right => selection.end,
+      _SelectionDirection.down => selection.end,
+    };
+
+    widget.presenter.selection.value = CodeSelection.collapsed(collapsedPosition);
+  }
+
   void _updatePreferredCaretXOffsetToMatchCurrentCaretOffset() {
     final selection = widget.presenter.selection.value;
-    if (selection == null || selection.isExpanded) {
+    if (selection == null) {
       return;
     }
 
@@ -158,7 +289,12 @@ class _CodeEditorState extends State<CodeEditor> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: _onTapDown,
+      onTapDown: _onClickDown,
+      onDoubleTapDown: _onDoubleClickDown,
+      onPanStart: _onPanStart,
+      onPanUpdate: _onPanUpdate,
+      onPanEnd: _onPanEnd,
+      onPanCancel: _onPanCancel,
       child: Focus(
         focusNode: _focusNode,
         onKeyEvent: _onKeyEvent,
@@ -188,17 +324,72 @@ class _CodeEditorState extends State<CodeEditor> {
 }
 
 class CodeEditorPresenter {
-  CodeEditorPresenter()
-      : codeLines = ValueNotifier([]),
-        selection = ValueNotifier(null);
+  CodeEditorPresenter(this._document, this._syntaxHighlighter)
+      : _codeLines = ValueNotifier([]),
+        selection = ValueNotifier(null) {
+    _syntaxHighlighter.attachToDocument(_document);
+
+    _codeLines.value = [
+      for (int i = 0; i < _syntaxHighlighter.lineCount; i += 1) //
+        _syntaxHighlighter.getStyledLineAt(i)!,
+    ];
+  }
 
   void dispose() {
-    codeLines.dispose();
+    _syntaxHighlighter.detachFromDocument();
+    _codeLines.dispose();
     selection.dispose();
   }
 
-  final ValueNotifier<List<TextSpan>> codeLines;
+  final CodeDocument _document;
+  final CodeDocumentSyntaxHighlighter _syntaxHighlighter;
+
+  ValueListenable<List<TextSpan>> get codeLines => _codeLines;
+  final ValueNotifier<List<TextSpan>> _codeLines;
+
   final ValueNotifier<CodeSelection?> selection;
+
+  void onDoubleClickAt(CodePosition codePosition, TextAffinity affinity) {
+    LexerToken? clickedToken = _document.findTokenAt(codePosition);
+    if (clickedToken == null) {
+      return;
+    }
+
+    if (clickedToken.kind == SyntaxKind.whitespace) {
+      // We don't want to select whitespace on double-click. Find a nearby token and
+      // select that instead.
+      if (affinity == TextAffinity.downstream || codePosition.characterOffset == 0) {
+        // Either we double clicked on the downstream edge of a character, or at the start of
+        // a line. Select to the right.
+        clickedToken = _document.findTokenToTheRightOnSameLine(codePosition, filter: nonWhitespace);
+      } else {
+        // Either we double clicked on the upstream edge of a character, or at the end of a line.
+        // Select to the left.
+        clickedToken = _document.findTokenToTheLeftOnSameLine(codePosition, filter: nonWhitespace);
+      }
+
+      if (clickedToken == null) {
+        // We couldn't find a nearby non-whitespace token.
+        return;
+      }
+    }
+
+    selection.value = CodeSelection(
+      base: _document.offsetToCodePosition(clickedToken.start),
+      extent: _document.offsetToCodePosition(clickedToken.end),
+    );
+  }
+}
+
+bool nonWhitespace(LexerToken token, CodePosition position) {
+  return token.kind != SyntaxKind.whitespace;
+}
+
+enum _SelectionDirection {
+  left,
+  right,
+  up,
+  down;
 }
 
 class CodeEditorStyle {

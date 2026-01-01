@@ -35,7 +35,6 @@ void main() {
 
       expect(doc.text, 'a+b');
       final after = doc.tokens;
-      print("Token: $after");
 
       // Ensure punctuation and word tokens are correct
       expect(after.length, 3);

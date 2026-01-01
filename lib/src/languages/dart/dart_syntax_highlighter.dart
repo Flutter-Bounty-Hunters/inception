@@ -1,10 +1,11 @@
 import 'package:flutter/widgets.dart';
 import 'package:inception/src/document/code_document.dart';
 import 'package:inception/src/document/lexing.dart';
+import 'package:inception/src/document/syntax_highlighter.dart';
 import 'package:inception/src/languages/dart/dart_theme.dart';
 
-class DartSyntaxHighlighter implements LexerTokenListener {
-  DartSyntaxHighlighter(this._theme) {
+class DartSyntaxHighlighter implements CodeDocumentSyntaxHighlighter {
+  DartSyntaxHighlighter(this._theme, this._baseTextStyle) {
     _genericStyles = {
       SyntaxKind.keyword: _theme.keyword,
       SyntaxKind.controlFlow: _theme.controlFlow,
@@ -17,16 +18,42 @@ class DartSyntaxHighlighter implements LexerTokenListener {
       SyntaxKind.whitespace: _theme.whitespace,
       SyntaxKind.unknown: _theme.unknown,
     };
-
-    _defaultStyle = _theme.baseTextStyle.copyWith(fontSize: 14, height: 2);
   }
 
-  final DartTheme _theme;
+  TextStyle _baseTextStyle;
+
+  @override
+  set baseTextStyle(TextStyle baseTextStyle) {
+    if (_baseTextStyle == baseTextStyle) {
+      return;
+    }
+
+    _baseTextStyle = baseTextStyle;
+    _rebuildAllLines();
+  }
+
+  DartTheme _theme;
+
+  @override
+  set theme(DartTheme theme) {
+    if (theme == _theme) {
+      return;
+    }
+
+    _theme = theme;
+
+    if (_attachedDocument != null) {
+      // Re-highlight with the new theme.
+      _rebuildAllLines();
+    }
+  }
 
   CodeDocument? _attachedDocument;
 
+  @override
   int get lineCount => _lineSpans.length;
 
+  @override
   TextSpan? getStyledLineAt(int lineIndex) {
     if (lineIndex < 0 || lineIndex >= _lineSpans.length) return null;
     return _lineSpans[lineIndex];
@@ -34,6 +61,7 @@ class DartSyntaxHighlighter implements LexerTokenListener {
 
   final List<TextSpan> _lineSpans = [];
 
+  @override
   void attachToDocument(CodeDocument document) {
     detachFromDocument();
     _attachedDocument = document;
@@ -41,6 +69,7 @@ class DartSyntaxHighlighter implements LexerTokenListener {
     _rebuildAllLines();
   }
 
+  @override
   void detachFromDocument() {
     _attachedDocument?.removeTokenChangeListener(this);
     _attachedDocument = null;
@@ -52,8 +81,8 @@ class DartSyntaxHighlighter implements LexerTokenListener {
     final doc = _attachedDocument;
     if (doc == null) return;
 
-    final startLine = doc.offsetToLineColumn(start).$1;
-    final endLine = doc.offsetToLineColumn(end).$1;
+    final startLine = doc.offsetToCodePosition(start).line;
+    final endLine = doc.offsetToCodePosition(end).line;
 
     final oldLineCount = _lineSpans.length;
     final newLineCount = doc.lineCount;
@@ -98,7 +127,6 @@ class DartSyntaxHighlighter implements LexerTokenListener {
   // Styling helpers
   // ---------------------
 
-  late TextStyle _defaultStyle;
   late final Map<SyntaxKind, TextStyle> _genericStyles;
 
   // Dart built-in types and keywords we want highlighted specially
@@ -177,7 +205,7 @@ class DartSyntaxHighlighter implements LexerTokenListener {
       if (clippedStart > lastOffset) {
         spans.add(TextSpan(
           text: text.substring(lastOffset, clippedStart),
-          style: _defaultStyle,
+          style: _baseTextStyle,
         ));
       }
 
@@ -196,7 +224,7 @@ class DartSyntaxHighlighter implements LexerTokenListener {
       }
 
       // Merge with default style
-      final effectiveStyle = _defaultStyle.merge(tokenKindStyle);
+      final effectiveStyle = _baseTextStyle.merge(tokenKindStyle);
 
       spans.add(TextSpan(
         text: tokenText.replaceAll('\n', ''),
@@ -209,7 +237,7 @@ class DartSyntaxHighlighter implements LexerTokenListener {
     if (lastOffset < lineEnd) {
       spans.add(TextSpan(
         text: text.substring(lastOffset, lineEnd),
-        style: _defaultStyle,
+        style: _baseTextStyle,
       ));
     }
 

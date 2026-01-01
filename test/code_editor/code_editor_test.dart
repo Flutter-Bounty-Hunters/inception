@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_test_robots/flutter_test_robots.dart';
 import 'package:flutter_test_runners/flutter_test_runners.dart';
 import 'package:inception/inception.dart';
-import 'package:inception/src/editor/code_editor.dart';
 
 void main() {
   group("Code editor >", () {
@@ -125,7 +124,7 @@ Future<void> _pumpScaffold(
   CodeEditorPresenter? presenter,
 }) async {
   // Create the default presenter, if none provided.
-  presenter ??= CodeEditorPresenter()..codeLines.value = _helloWorldCodeLines;
+  presenter ??= DisplayOnlyCodeEditorPresenter()..codeLines.value = _helloWorldCodeLines;
 
   await tester.pumpWidget(
     MaterialApp(
