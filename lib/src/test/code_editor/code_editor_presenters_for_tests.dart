@@ -3,14 +3,17 @@ import 'package:flutter/painting.dart';
 import 'package:inception/src/document/selection.dart';
 import 'package:inception/src/editor/code_editor.dart';
 
-/// A [CodeEditorPresenter] that only contains visual information, e.g., the [codeLines]
-/// to display and the [selection] to render, without any backing [CodeDocument].
+/// A [CodeEditorPresenter] that's indented for use within tests.
 ///
-/// This presenter is meant for tests that want to verify various editor UI details, without
-/// creating a backing document that is then tokenized in precisely the desired way. Instead,
-/// tests can set whatever [codeLines] they want.
-class DisplayOnlyCodeEditorPresenter implements CodeEditorPresenter {
-  DisplayOnlyCodeEditorPresenter()
+/// This presenter doesn't contain any language-specific capabilities, and it doesn't
+/// implement sophisticated interactions, like double-click and drag.
+///
+/// This presenter exposes [codeLines] as a notifier so that external code can change
+/// the [codeLines] as if those changes came from a real `CodeDocument`. This allows tests
+/// to verify visual behaviors without lexing a real `CodeDocument`, using a knowledge of
+/// a real language.
+class TestCodeEditorPresenter implements CodeEditorPresenter {
+  TestCodeEditorPresenter()
       : codeLines = ValueNotifier([]),
         selection = ValueNotifier(null);
 
@@ -28,7 +31,8 @@ class DisplayOnlyCodeEditorPresenter implements CodeEditorPresenter {
 
   @override
   void onClickDownAt(CodePosition codePosition, TextAffinity affinity) {
-    // No-op.
+    // Place the caret.
+    selection.value = CodeSelection.collapsed(codePosition);
   }
 
   @override

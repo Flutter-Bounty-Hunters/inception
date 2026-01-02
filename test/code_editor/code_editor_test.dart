@@ -124,7 +124,7 @@ Future<void> _pumpScaffold(
   CodeEditorPresenter? presenter,
 }) async {
   // Create the default presenter, if none provided.
-  presenter ??= DisplayOnlyCodeEditorPresenter()..codeLines.value = _helloWorldCodeLines;
+  presenter ??= TestCodeEditorPresenter()..codeLines.value = _helloWorldCodeLines;
 
   await tester.pumpWidget(
     MaterialApp(

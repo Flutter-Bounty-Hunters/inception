@@ -6,74 +6,6 @@ import 'package:inception/src/infrastructure/flutter_extensions/render_box_exten
 import 'package:super_editor/super_editor.dart' show kTapMinTime, kTapTimeout;
 
 extension CodeLayoutTestInteractor on WidgetTester {
-  /// Click's on the character in the given [line], at the given [characterOffset], and clicks
-  /// slightly towards the upstream side of the character (e.g., the left side for LTR languages).
-  ///
-  /// {@template why_not_click_center}
-  /// ### Why doesn't this method click on the center of the character?
-  /// In practice, clicking on a character will place the caret on one side of the character,
-  /// or the other. Rather than leave that ambiguous, this API makes it clear which side of
-  /// the character is clicked, and therefore which side of the character the caret will be
-  /// placed.
-  /// {@endtemplate}
-  Future<void> clickOnCharacterUpstream(
-    int line,
-    int characterOffset, {
-    bool settle = true,
-    Finder? codeLayoutFinder,
-  }) async {
-    final (codeLayout, codeBox) = findCodeLayout(
-      "tap at code position (line: $line, offset: $characterOffset)",
-      codeLayoutFinder,
-    );
-
-    final globalCharacterRect = codeBox.localRectToGlobal(
-      codeLayout.getLocalRectForCodePosition(CodePosition(line, characterOffset)),
-    );
-
-    final clickOffset = Offset(
-      globalCharacterRect.left + (globalCharacterRect.width * 0.25),
-      globalCharacterRect.top + (globalCharacterRect.height / 2),
-    );
-
-    await tapAt(clickOffset);
-
-    if (settle) {
-      await pumpAndSettle();
-    }
-  }
-
-  /// Click's on the character in the given [line], at the given [characterOffset], and clicks
-  /// slightly towards the downstream side of the character (e.g., the right side for LTR languages).
-  ///
-  /// {@macro why_not_click_center}
-  Future<void> clickOnCharacterDownstream(
-    int line,
-    int characterOffset, {
-    bool settle = true,
-    Finder? codeLayoutFinder,
-  }) async {
-    final (codeLayout, codeBox) = findCodeLayout(
-      "tap at code position (line: $line, offset: $characterOffset)",
-      codeLayoutFinder,
-    );
-
-    final globalCharacterRect = codeBox.localRectToGlobal(
-      codeLayout.getLocalRectForCodePosition(CodePosition(line, characterOffset)),
-    );
-
-    final clickOffset = Offset(
-      globalCharacterRect.left + (globalCharacterRect.width * 0.75),
-      globalCharacterRect.top + (globalCharacterRect.height / 2),
-    );
-
-    await tapAt(clickOffset);
-
-    if (settle) {
-      await pumpAndSettle();
-    }
-  }
-
   /// Clicks between characters (or before/after characters) within the given [line], at the given
   /// [characterOffset].
   ///
@@ -122,7 +54,6 @@ extension CodeLayoutTestInteractor on WidgetTester {
   ///
   /// To click between character boxes, or to click at the start or end of text, beyond a character
   /// box, use [clickOnCaretPosition].
-  // TODO: De-dup this implementation with double and triple click.
   Future<void> clickOnCodePosition(
     int line,
     int characterOffset, {
@@ -130,36 +61,19 @@ extension CodeLayoutTestInteractor on WidgetTester {
     bool settle = true,
     Finder? codeLayoutFinder,
   }) async {
-    final (codeLayout, codeBox) = findCodeLayout(
-      "tap at code position (line: $line, offset: $characterOffset)",
-      codeLayoutFinder,
+    return _multiClickAtCodePosition(
+      line,
+      characterOffset,
+      clickCount: 1,
+      affinity: affinity,
+      settle: settle,
+      codeLayoutFinder: codeLayoutFinder,
     );
-
-    final globalCharacterRect = codeBox.localRectToGlobal(
-      codeLayout.getLocalRectForCodePosition(CodePosition(line, characterOffset)),
-    );
-
-    final proportionalXAdjustment = switch (affinity) {
-      TextAffinity.upstream => globalCharacterRect.width * 0.25,
-      TextAffinity.downstream => globalCharacterRect.width * 0.75,
-    };
-    final clickOffset = Offset(
-      globalCharacterRect.left + proportionalXAdjustment,
-      globalCharacterRect.top + (globalCharacterRect.height / 2),
-    );
-
-    await tapAt(clickOffset);
-    await pump(kTapTimeout);
-
-    if (settle) {
-      await pumpAndSettle();
-    }
   }
 
   /// Double clicks on the character box in the given [line] at the given [characterOffset].
   ///
   /// {@macro character_click_box_affinity}
-  // TODO: De-dup this implementation with single and triple click.
   Future<void> doubleClickAtCodePosition(
     int line,
     int characterOffset, {
@@ -167,35 +81,19 @@ extension CodeLayoutTestInteractor on WidgetTester {
     bool settle = true,
     Finder? codeLayoutFinder,
   }) async {
-    final (codeLayout, codeBox) = findCodeLayout(
-      "double tap at code position (line: $line, offset: $characterOffset)",
-      codeLayoutFinder,
+    return _multiClickAtCodePosition(
+      line,
+      characterOffset,
+      clickCount: 2,
+      affinity: affinity,
+      settle: settle,
+      codeLayoutFinder: codeLayoutFinder,
     );
-
-    final globalCharacterRect = codeBox.localRectToGlobal(
-      codeLayout.getLocalRectForCodePosition(CodePosition(line, characterOffset)),
-    );
-
-    final proportionalXAdjustment = switch (affinity) {
-      TextAffinity.upstream => globalCharacterRect.width * 0.25,
-      TextAffinity.downstream => globalCharacterRect.width * 0.75,
-    };
-    final clickOffset = Offset(
-      globalCharacterRect.left + proportionalXAdjustment,
-      globalCharacterRect.top + (globalCharacterRect.height / 2),
-    );
-
-    await tapAt(clickOffset);
-    await pump(kTapMinTime + const Duration(milliseconds: 1));
-    await tapAt(clickOffset);
-    await pump(kTapTimeout);
-
-    if (settle) {
-      await pumpAndSettle();
-    }
   }
 
-  // TODO: De-dup this implementation with single and double click.
+  /// Triple clicks on the character box in the given [line] at the given [characterOffset].
+  ///
+  /// {@macro character_click_box_affinity}
   Future<void> tripleClickAtCodePosition(
     int line,
     int characterOffset, {
@@ -203,8 +101,28 @@ extension CodeLayoutTestInteractor on WidgetTester {
     bool settle = true,
     Finder? codeLayoutFinder,
   }) async {
+    return _multiClickAtCodePosition(
+      line,
+      characterOffset,
+      clickCount: 3,
+      affinity: affinity,
+      settle: settle,
+      codeLayoutFinder: codeLayoutFinder,
+    );
+  }
+
+  Future<void> _multiClickAtCodePosition(
+    int line,
+    int characterOffset, {
+    required int clickCount,
+    TextAffinity affinity = TextAffinity.downstream,
+    bool settle = true,
+    Finder? codeLayoutFinder,
+  }) async {
+    assert(clickCount >= 1);
+
     final (codeLayout, codeBox) = findCodeLayout(
-      "triple tap at code position (line: $line, offset: $characterOffset)",
+      "multi-tap ($clickCount) at code position (line: $line, offset: $characterOffset)",
       codeLayoutFinder,
     );
 
@@ -221,11 +139,10 @@ extension CodeLayoutTestInteractor on WidgetTester {
       globalCharacterRect.top + (globalCharacterRect.height / 2),
     );
 
-    await tapAt(clickOffset);
-    await pump(kTapMinTime + const Duration(milliseconds: 1));
-    await tapAt(clickOffset);
-    await pump(kTapMinTime + const Duration(milliseconds: 1));
-    await tapAt(clickOffset);
+    for (int i = 0; i < clickCount; i += 1) {
+      await tapAt(clickOffset);
+      await pump(kTapMinTime + const Duration(milliseconds: 1));
+    }
     await pump(kTapTimeout);
 
     if (settle) {
