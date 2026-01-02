@@ -185,7 +185,7 @@ Future<void> _pumpScaffold(WidgetTester tester, CodeDocument document) async {
     MaterialApp(
       home: Scaffold(
         body: CodeEditor(
-          presenter: CodeEditorPresenter(
+          presenter: DartCodeEditorPresenter(
             document,
             DartSyntaxHighlighter(
               pineappleDartTheme,

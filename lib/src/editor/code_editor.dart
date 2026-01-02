@@ -1,13 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:inception/src/document/code_document.dart';
-import 'package:inception/src/document/lexing.dart';
 import 'package:inception/src/document/selection.dart';
-import 'package:inception/src/document/syntax_highlighter.dart';
 import 'package:inception/src/editor/code_layout.dart';
 import 'package:inception/src/editor/theme.dart';
-import 'package:inception/src/infrastructure/text/code_comment_selection_rules.dart';
+import 'package:super_editor/super_editor.dart' show TapSequenceGestureRecognizer;
 
 class CodeEditor extends StatefulWidget {
   const CodeEditor({
@@ -53,7 +50,7 @@ class _CodeEditorState extends State<CodeEditor> {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
 
-    widget.presenter.selection.value = CodeSelection.collapsed(codeTapPosition);
+    widget.presenter.onClickDownAt(codeTapPosition, affinity);
 
     _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
 
@@ -68,11 +65,14 @@ class _CodeEditorState extends State<CodeEditor> {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
 
-    widget.presenter.onDoubleClickAt(codeTapPosition, affinity);
+    widget.presenter.onDoubleClickDownAt(codeTapPosition, affinity);
   }
 
   void _onTripleClickDown(TapDownDetails details) {
-    // TODO:
+    final codeLayout = _codeLayoutKey.currentState as CodeLayout;
+    final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
+
+    widget.presenter.onTripleClickDownAt(codeTapPosition, affinity);
   }
 
   CodePosition? _dragStartPosition;
@@ -294,122 +294,69 @@ class _CodeEditorState extends State<CodeEditor> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: _onClickDown,
-      onDoubleTapDown: _onDoubleClickDown,
-      onPanStart: _onPanStart,
-      onPanUpdate: _onPanUpdate,
-      onPanEnd: _onPanEnd,
-      onPanCancel: _onPanCancel,
-      child: Focus(
-        focusNode: _focusNode,
-        onKeyEvent: _onKeyEvent,
-        child: ListenableBuilder(
-          listenable: Listenable.merge([
-            widget.presenter.codeLines,
-            widget.presenter.selection,
-          ]),
-          builder: (context, child) {
-            return CodeLines(
-              key: _codeLayoutKey,
-              codeLines: widget.presenter.codeLines.value,
-              selection: widget.presenter.selection.value,
-              style: CodeLinesStyle(
-                gutterColor: widget.style.gutterColor,
-                gutterBorderColor: widget.style.gutterBorderColor,
-                lineBackgroundColor: widget.style.lineBackgroundColor,
-                indentLineColor: widget.style.indentLineColor,
-                baseTextStyle: widget.style.baseTextStyle,
-              ),
-            );
+    final gestureSettings = MediaQuery.maybeOf(context)?.gestureSettings;
+
+    return RawGestureDetector(
+      gestures: <Type, GestureRecognizerFactory>{
+        TapSequenceGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapSequenceGestureRecognizer>(
+          () => TapSequenceGestureRecognizer(),
+          (TapSequenceGestureRecognizer recognizer) {
+            recognizer
+              ..onTapDown = _onClickDown
+              // ..onTapCancel = _onTapCancel
+              // ..onTapUp = _onTapUp
+              ..onDoubleTapDown = _onDoubleClickDown
+              ..onTripleTapDown = _onTripleClickDown
+              ..gestureSettings = gestureSettings;
           },
+        ),
+      },
+      child: GestureDetector(
+        onPanStart: _onPanStart,
+        onPanUpdate: _onPanUpdate,
+        onPanEnd: _onPanEnd,
+        onPanCancel: _onPanCancel,
+        child: Focus(
+          focusNode: _focusNode,
+          onKeyEvent: _onKeyEvent,
+          child: ListenableBuilder(
+            listenable: Listenable.merge([
+              widget.presenter.codeLines,
+              widget.presenter.selection,
+            ]),
+            builder: (context, child) {
+              return CodeLines(
+                key: _codeLayoutKey,
+                codeLines: widget.presenter.codeLines.value,
+                selection: widget.presenter.selection.value,
+                style: CodeLinesStyle(
+                  gutterColor: widget.style.gutterColor,
+                  gutterBorderColor: widget.style.gutterBorderColor,
+                  lineBackgroundColor: widget.style.lineBackgroundColor,
+                  indentLineColor: widget.style.indentLineColor,
+                  baseTextStyle: widget.style.baseTextStyle,
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
   }
 }
 
-class CodeEditorPresenter {
-  CodeEditorPresenter(this._document, this._syntaxHighlighter)
-      : _codeLines = ValueNotifier([]),
-        selection = ValueNotifier(null) {
-    _syntaxHighlighter.attachToDocument(_document);
+abstract class CodeEditorPresenter {
+  void dispose();
 
-    _codeLines.value = [
-      for (int i = 0; i < _syntaxHighlighter.lineCount; i += 1) //
-        _syntaxHighlighter.getStyledLineAt(i)!,
-    ];
-  }
+  ValueListenable<List<TextSpan>> get codeLines;
 
-  void dispose() {
-    _syntaxHighlighter.detachFromDocument();
-    _codeLines.dispose();
-    selection.dispose();
-  }
+  ValueNotifier<CodeSelection?> get selection;
 
-  final CodeDocument _document;
-  final CodeDocumentSyntaxHighlighter _syntaxHighlighter;
+  void onClickDownAt(CodePosition codePosition, TextAffinity affinity);
 
-  ValueListenable<List<TextSpan>> get codeLines => _codeLines;
-  final ValueNotifier<List<TextSpan>> _codeLines;
+  void onDoubleClickDownAt(CodePosition codePosition, TextAffinity affinity);
 
-  final ValueNotifier<CodeSelection?> selection;
-
-  void onDoubleClickAt(CodePosition codePosition, TextAffinity affinity) {
-    LexerToken? clickedToken = _document.findTokenAt(codePosition);
-
-    if (clickedToken == null ||
-        (clickedToken.kind == SyntaxKind.whitespace &&
-            _document.offsetToCodePosition(clickedToken.start).characterOffset > 0)) {
-      // We don't want to select whitespace in the middle of a code line on double-click.
-      // Find a nearby token and select that instead.
-      //
-      // Note: Some lexers might choose not to tokenize whitespace, in which case whitespace
-      // will have a null token.
-      //
-      // Note: We exclude cases where the token starts at offset `0` because that space is
-      // indentation space, and we DO want to double click to select that.
-      if (affinity == TextAffinity.downstream || codePosition.characterOffset == 0) {
-        // Either we double clicked on the downstream edge of a character, or at the start of
-        // a line. Select to the right.
-        clickedToken = _document.findTokenToTheRightOnSameLine(codePosition, filter: nonWhitespace);
-      } else {
-        // Either we double clicked on the upstream edge of a character, or at the end of a line.
-        // Select to the left.
-        clickedToken = _document.findTokenToTheLeftOnSameLine(codePosition, filter: nonWhitespace);
-      }
-
-      if (clickedToken == null) {
-        // We couldn't find a nearby non-whitespace token.
-        return;
-      }
-    }
-
-    if (clickedToken.kind == SyntaxKind.comment) {
-      final line = _document.getLine(codePosition.line)!;
-      final wordRange = CodeCommentSelection.findNearestSelectableToken(
-        line,
-        codePosition.characterOffset,
-        affinity,
-        ["///", "//"],
-      );
-
-      selection.value = CodeSelection(
-        base: CodePosition(codePosition.line, wordRange.start),
-        extent: CodePosition(codePosition.line, wordRange.end),
-      );
-      return;
-    }
-
-    selection.value = CodeSelection(
-      base: _document.offsetToCodePosition(clickedToken.start),
-      extent: _document.offsetToCodePosition(clickedToken.end),
-    );
-  }
-}
-
-bool nonWhitespace(LexerToken token, CodePosition position) {
-  return token.kind != SyntaxKind.whitespace;
+  void onTripleClickDownAt(CodePosition codePosition, TextAffinity affinity);
 }
 
 enum _SelectionDirection {

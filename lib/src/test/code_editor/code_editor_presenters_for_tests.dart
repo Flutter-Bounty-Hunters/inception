@@ -27,7 +27,17 @@ class DisplayOnlyCodeEditorPresenter implements CodeEditorPresenter {
   final ValueNotifier<CodeSelection?> selection;
 
   @override
-  void onDoubleClickAt(CodePosition codePosition, TextAffinity affinity) {
+  void onClickDownAt(CodePosition codePosition, TextAffinity affinity) {
+    // No-op.
+  }
+
+  @override
+  void onDoubleClickDownAt(CodePosition codePosition, TextAffinity affinity) {
+    // No-op.
+  }
+
+  @override
+  void onTripleClickDownAt(CodePosition codePosition, TextAffinity affinity) {
     // No-op.
   }
 }

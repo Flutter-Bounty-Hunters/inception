@@ -122,6 +122,7 @@ extension CodeLayoutTestInteractor on WidgetTester {
   ///
   /// To click between character boxes, or to click at the start or end of text, beyond a character
   /// box, use [clickOnCaretPosition].
+  // TODO: De-dup this implementation with double and triple click.
   Future<void> clickOnCodePosition(
     int line,
     int characterOffset, {
@@ -158,6 +159,7 @@ extension CodeLayoutTestInteractor on WidgetTester {
   /// Double clicks on the character box in the given [line] at the given [characterOffset].
   ///
   /// {@macro character_click_box_affinity}
+  // TODO: De-dup this implementation with single and triple click.
   Future<void> doubleClickAtCodePosition(
     int line,
     int characterOffset, {
@@ -193,13 +195,41 @@ extension CodeLayoutTestInteractor on WidgetTester {
     }
   }
 
+  // TODO: De-dup this implementation with single and double click.
   Future<void> tripleClickAtCodePosition(
     int line,
-    int offset, {
+    int characterOffset, {
     TextAffinity affinity = TextAffinity.downstream,
     bool settle = true,
     Finder? codeLayoutFinder,
   }) async {
-    // TODO:
+    final (codeLayout, codeBox) = findCodeLayout(
+      "triple tap at code position (line: $line, offset: $characterOffset)",
+      codeLayoutFinder,
+    );
+
+    final globalCharacterRect = codeBox.localRectToGlobal(
+      codeLayout.getLocalRectForCodePosition(CodePosition(line, characterOffset)),
+    );
+
+    final proportionalXAdjustment = switch (affinity) {
+      TextAffinity.upstream => globalCharacterRect.width * 0.25,
+      TextAffinity.downstream => globalCharacterRect.width * 0.75,
+    };
+    final clickOffset = Offset(
+      globalCharacterRect.left + proportionalXAdjustment,
+      globalCharacterRect.top + (globalCharacterRect.height / 2),
+    );
+
+    await tapAt(clickOffset);
+    await pump(kTapMinTime + const Duration(milliseconds: 1));
+    await tapAt(clickOffset);
+    await pump(kTapMinTime + const Duration(milliseconds: 1));
+    await tapAt(clickOffset);
+    await pump(kTapTimeout);
+
+    if (settle) {
+      await pumpAndSettle();
+    }
   }
 }
