@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inception/inception.dart';
+import 'package:inception/src/languages/dart/dart_lexer.dart';
 
 void main() {
   group('CodeDocument tokenization', () {

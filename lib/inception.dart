@@ -14,11 +14,6 @@ export 'src/editor/theme.dart';
 
 export 'src/infrastructure/text/code_comment_selection_rules.dart';
 
-export 'src/languages/dart/dart_contextualizer.dart';
-export 'src/languages/dart/dart_lexer.dart';
-export 'src/languages/dart/dart_syntax_highlighter.dart';
-export 'src/languages/dart/dart_theme.dart';
-
 export 'src/lsp/lsp_client.dart';
 export 'src/lsp/messages/initialize.dart';
 export 'src/lsp/messages/code_actions.dart';
