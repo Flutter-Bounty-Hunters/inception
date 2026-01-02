@@ -1014,8 +1014,8 @@ class _LineSelectionBoxContentLayer extends ContentLayerStatelessWidget {
     final textBoundaryOffset =
         (codeTextKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(Offset.zero, ancestor: lineBox);
 
-    final paintToStartOfLine = lineSelection != null && lineSelection!.start == 0 && !hasStart;
-    final paintToEndOfLine = lineSelection != null && lineSelection!.end == codeText.toPlainText().length && !hasEnd;
+    final paintToStartOfLine = lineSelection!.start == 0 && !hasStart;
+    final paintToEndOfLine = lineSelection!.end == codeText.toPlainText().length && !hasEnd;
 
     final selectionBoxLeft = paintToStartOfLine
         ? 0.0
@@ -1051,7 +1051,7 @@ class _LineSelectionBoxContentLayer extends ContentLayerStatelessWidget {
           // TODO: Make this color theme-configurable.
           // FIXME: Figure out why left/right values are NaN for lines that scroll off
           //        screen. Check if we should fix something in super_text_layout.
-          if (lineSelection?.isCollapsed == false && !selectionBoxLeft.isNaN && !selectionBoxRight.isNaN)
+          if (!selectionBoxLeft.isNaN && !selectionBoxRight.isNaN)
             Positioned(
               top: 0,
               bottom: 0,
