@@ -76,6 +76,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   CodePosition? _dragStartPosition;
+  CodeSelection? _dragStartSelection;
 
   void _onPanStart(DragStartDetails details) {
     if (_dragStartPosition == null) {
@@ -87,23 +88,54 @@ class _CodeEditorState extends State<CodeEditor> {
       // Ensure the editor has focus, now that the user has clicked it.
       _focusNode.requestFocus();
     }
+
+    if (widget.presenter.selection.value?.isExpanded == true) {
+      // The selection is expanded at drag start. This happens on a double-click-and-drag,
+      // and a triple-click-and-drag. Record it, because we don't want any drag offset to
+      // reduce the selection to less than this word or line.
+      _dragStartSelection = widget.presenter.selection.value;
+    }
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final newExtent = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition).$1;
 
-    widget.presenter.selection.value = CodeSelection(base: _dragStartPosition!, extent: newExtent);
+    if (_dragStartSelection != null) {
+      // The user started dragging with a double or triple click. In this case,
+      // expand the original selection range to include the new extent, but don't
+      // let the selection become less than it was when the dragging started. I.e.,
+      // the original word or the original line will remain selected no matter where
+      // the user drags.
+      widget.presenter.selection.value = _dragStartSelection!.isDownstream
+          ? CodeSelection(
+              base: _dragStartSelection!.start <= newExtent ? _dragStartSelection!.start : _dragStartSelection!.end,
+              extent: newExtent < _dragStartSelection!.start || newExtent > _dragStartSelection!.end
+                  ? newExtent
+                  : _dragStartSelection!.end,
+            )
+          : CodeSelection(
+              base: newExtent <= _dragStartSelection!.end ? _dragStartSelection!.end : _dragStartSelection!.start,
+              extent: newExtent < _dragStartSelection!.start || newExtent > _dragStartSelection!.end
+                  ? newExtent
+                  : _dragStartSelection!.start,
+            );
+    } else {
+      // Select from the drag start position to the new extent.
+      widget.presenter.selection.value = CodeSelection(base: _dragStartPosition!, extent: newExtent);
+    }
 
     _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
   }
 
   void _onPanEnd(DragEndDetails details) {
     _dragStartPosition = null;
+    _dragStartSelection = null;
   }
 
   void _onPanCancel() {
     _dragStartPosition = null;
+    _dragStartSelection = null;
   }
 
   KeyEventResult _onKeyEvent(FocusNode _, KeyEvent keyEvent) {
