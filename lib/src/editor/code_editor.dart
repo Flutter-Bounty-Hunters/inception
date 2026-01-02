@@ -303,8 +303,6 @@ class _CodeEditorState extends State<CodeEditor> {
           (TapSequenceGestureRecognizer recognizer) {
             recognizer
               ..onTapDown = _onClickDown
-              // ..onTapCancel = _onTapCancel
-              // ..onTapUp = _onTapUp
               ..onDoubleTapDown = _onDoubleClickDown
               ..onTripleTapDown = _onTripleClickDown
               ..gestureSettings = gestureSettings;

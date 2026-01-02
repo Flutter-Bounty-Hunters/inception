@@ -999,11 +999,10 @@ class _LineSelectionBoxContentLayer extends ContentLayerStatelessWidget {
 
   @override
   Widget doBuild(BuildContext context, Element? contentElement, RenderObject? contentLayout) {
-    if (lineSelection == null || lineSelection!.isCollapsed) {
+    if (lineSelection == null) {
       return const EmptyContentLayer();
     }
 
-    // print("_LineSelectionBoxContentLayer ($contentLayout)");
     final lineBox = contentLayout as RenderBox;
     final textLayout = codeTextKey.currentState as ProseTextBlock;
     // Note: Instead of getting the absolute global offset of the line and the text layout, and then calculating
@@ -1014,21 +1013,9 @@ class _LineSelectionBoxContentLayer extends ContentLayerStatelessWidget {
     //       was blowing up.
     final textBoundaryOffset =
         (codeTextKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(Offset.zero, ancestor: lineBox);
-    // print(" - distance from line boundary to text boundary: $textBoundaryOffset");
 
     final paintToStartOfLine = lineSelection != null && lineSelection!.start == 0 && !hasStart;
     final paintToEndOfLine = lineSelection != null && lineSelection!.end == codeText.toPlainText().length && !hasEnd;
-
-    // print(" - line selection: $lineSelection");
-    // print(" - line selection start: ${lineSelection!.start}, has base: $hasStart");
-    // print(" - left x: ${textLayout.textLayout.getOffsetForCaret(
-    //       TextPosition(offset: lineSelection!.start),
-    //     ).dx}");
-    // print(" - paint to start of line? $paintToStartOfLine");
-    // print(" - right x: ${paintToEndOfLine ? 0 : lineBox.size.width - textLayout.textLayout.getOffsetForCaret(
-    //       TextPosition(offset: codeText.toPlainText().length),
-    //     ).dx}");
-    // print(" - paint to end of line? $paintToEndOfLine");
 
     final selectionBoxLeft = paintToStartOfLine
         ? 0.0
@@ -1064,7 +1051,7 @@ class _LineSelectionBoxContentLayer extends ContentLayerStatelessWidget {
           // TODO: Make this color theme-configurable.
           // FIXME: Figure out why left/right values are NaN for lines that scroll off
           //        screen. Check if we should fix something in super_text_layout.
-          if (!selectionBoxLeft.isNaN && !selectionBoxRight.isNaN)
+          if (lineSelection?.isCollapsed == false && !selectionBoxLeft.isNaN && !selectionBoxRight.isNaN)
             Positioned(
               top: 0,
               bottom: 0,
