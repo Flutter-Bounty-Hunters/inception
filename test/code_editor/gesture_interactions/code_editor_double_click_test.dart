@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_test_runners/flutter_test_runners.dart';
 import 'package:inception/inception.dart';
 import 'package:inception/language_dart.dart';
-import 'package:inception/src/languages/dart/dart_theme_pineapple.dart';
 
 void main() {
   group("Code Editor > double click >", () {

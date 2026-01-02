@@ -32,6 +32,15 @@ class DartCodeEditorPresenter implements CodeEditorPresenter {
   final CodeDocumentSyntaxHighlighter _syntaxHighlighter;
 
   @override
+  int get lineCount => _document.lineCount;
+
+  @override
+  int getLineLength(int lineIndex) => _document.getLine(lineIndex)!.length;
+
+  @override
+  int getLineIndent(int lineIndex) => RegExp(r"^(\s*)").firstMatch(_document.getLine(lineIndex)!)!.end;
+
+  @override
   ValueListenable<List<TextSpan>> get codeLines => _codeLines;
   final ValueNotifier<List<TextSpan>> _codeLines;
 

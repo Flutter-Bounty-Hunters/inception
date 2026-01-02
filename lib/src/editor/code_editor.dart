@@ -250,6 +250,52 @@ class _CodeEditorState extends State<CodeEditor> {
       return;
     }
 
+    if (HardwareKeyboard.instance.isMetaPressed && direction.isHorizontal) {
+      switch (direction) {
+        case _SelectionDirection.left:
+          if (selection.extent.characterOffset == 0) {
+            // Jump to previous line.
+            if (selection.extent.line > 0) {
+              widget.presenter.selection.value = CodeSelection.collapsed(
+                CodePosition(
+                  selection.extent.line - 1,
+                  widget.presenter.codeLines.value[selection.extent.line - 1].toPlainText().length,
+                ),
+              );
+            }
+          } else {
+            final lineIndentOffset = widget.presenter.getLineIndent(selection.extent.line);
+
+            if (selection.extent.characterOffset > lineIndentOffset) {
+              // Jump left to where the code starts, after the indent.
+              widget.presenter.selection.value = CodeSelection.collapsed(
+                CodePosition(selection.extent.line, lineIndentOffset),
+              );
+            } else {
+              // Jump all the way to the start of the line, before the indent.
+              widget.presenter.selection.value = CodeSelection.collapsed(CodePosition(selection.extent.line, 0));
+            }
+          }
+        case _SelectionDirection.right:
+          final lineLength = widget.presenter.codeLines.value[selection.extent.line].toPlainText().length;
+
+          if (selection.extent.characterOffset < lineLength) {
+            // Move caret to end of current line.
+            widget.presenter.selection.value = CodeSelection.collapsed(
+              CodePosition(selection.extent.line, lineLength),
+            );
+          } else if (widget.presenter.codeLines.value.length > selection.extent.line + 1) {
+            // Move caret to start of next line.
+            widget.presenter.selection.value = CodeSelection.collapsed(
+              CodePosition(selection.extent.line + 1, 0),
+            );
+          }
+        default:
+          throw Exception("Push direction said it was horizontal, but it wasn't.");
+      }
+      return;
+    }
+
     final newPosition = switch (direction) {
       _SelectionDirection.left => _codeLayout.findPositionBefore(selection.extent),
       _SelectionDirection.right => _codeLayout.findPositionAfter(selection.extent),
@@ -272,6 +318,59 @@ class _CodeEditorState extends State<CodeEditor> {
   void _expandSelectionInDirection(_SelectionDirection direction) {
     final selection = widget.presenter.selection.value;
     if (selection == null) {
+      return;
+    }
+
+    if (HardwareKeyboard.instance.isMetaPressed && direction.isHorizontal) {
+      switch (direction) {
+        case _SelectionDirection.left:
+          if (selection.extent.characterOffset == 0) {
+            // Jump to previous line.
+            if (selection.extent.line > 0) {
+              widget.presenter.selection.value = CodeSelection(
+                base: selection.base,
+                extent: CodePosition(
+                  selection.extent.line - 1,
+                  widget.presenter.codeLines.value[selection.extent.line - 1].toPlainText().length,
+                ),
+              );
+            }
+          } else {
+            final lineIndentOffset = widget.presenter.getLineIndent(selection.extent.line);
+
+            if (selection.extent.characterOffset > lineIndentOffset) {
+              // Jump left to where the code starts, after the indent.
+              widget.presenter.selection.value = CodeSelection(
+                base: selection.base,
+                extent: CodePosition(selection.extent.line, lineIndentOffset),
+              );
+            } else {
+              // Jump all the way to the start of the line, before the indent.
+              widget.presenter.selection.value = CodeSelection(
+                base: selection.base,
+                extent: CodePosition(selection.extent.line, 0),
+              );
+            }
+          }
+        case _SelectionDirection.right:
+          final lineLength = widget.presenter.codeLines.value[selection.extent.line].toPlainText().length;
+
+          if (selection.extent.characterOffset < lineLength) {
+            // Move caret to end of current line.
+            widget.presenter.selection.value = CodeSelection(
+              base: selection.base,
+              extent: CodePosition(selection.extent.line, lineLength),
+            );
+          } else if (widget.presenter.codeLines.value.length > selection.extent.line + 1) {
+            // Move caret to start of next line.
+            widget.presenter.selection.value = CodeSelection(
+              base: selection.base,
+              extent: CodePosition(selection.extent.line + 1, 0),
+            );
+          }
+        default:
+          throw Exception("Push direction said it was horizontal, but it wasn't.");
+      }
       return;
     }
 
@@ -378,6 +477,12 @@ class _CodeEditorState extends State<CodeEditor> {
 abstract class CodeEditorPresenter {
   void dispose();
 
+  int get lineCount;
+
+  int getLineLength(int lineIndex);
+
+  int getLineIndent(int lineIndex);
+
   ValueListenable<List<TextSpan>> get codeLines;
 
   ValueNotifier<CodeSelection?> get selection;
@@ -394,6 +499,10 @@ enum _SelectionDirection {
   right,
   up,
   down;
+
+  bool get isHorizontal => this == left || this == right;
+
+  bool get isVertical => this == up || this == down;
 }
 
 class CodeEditorStyle {

@@ -24,6 +24,15 @@ class TestCodeEditorPresenter implements CodeEditorPresenter {
   }
 
   @override
+  int get lineCount => codeLines.value.length;
+
+  @override
+  int getLineLength(int lineIndex) => codeLines.value[lineIndex].toPlainText().length;
+
+  @override
+  int getLineIndent(int lineIndex) => RegExp(r"^(\s*)").firstMatch(codeLines.value[lineIndex].toPlainText())!.end;
+
+  @override
   final ValueNotifier<List<TextSpan>> codeLines;
 
   @override
