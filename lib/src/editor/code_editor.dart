@@ -9,9 +9,12 @@ import 'package:super_editor/super_editor.dart' show TapSequenceGestureRecognize
 class CodeEditor extends StatefulWidget {
   const CodeEditor({
     super.key,
+    this.focusNode,
     required this.presenter,
     required this.style,
   });
+
+  final FocusNode? focusNode;
 
   // TODO: The presenter handles the double click, so it should know the Dart vs Luau comment syntax
   final CodeEditorPresenter presenter;
@@ -22,7 +25,7 @@ class CodeEditor extends StatefulWidget {
 }
 
 class _CodeEditorState extends State<CodeEditor> {
-  final _focusNode = FocusNode(debugLabel: 'code-editor');
+  late FocusNode _focusNode;
 
   final _codeLayoutKey = GlobalKey(debugLabel: 'code-layout');
 
@@ -33,16 +36,24 @@ class _CodeEditorState extends State<CodeEditor> {
   @override
   void initState() {
     super.initState();
+
+    _focusNode = widget.focusNode ?? FocusNode(debugLabel: 'code-editor');
   }
 
   @override
   void didUpdateWidget(covariant CodeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    if (widget.focusNode != oldWidget.focusNode) {
+      _focusNode = widget.focusNode ?? FocusNode(debugLabel: 'code-editor');
+    }
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
@@ -145,6 +156,15 @@ class _CodeEditorState extends State<CodeEditor> {
     }
 
     switch (keyEvent.logicalKey) {
+      case LogicalKeyboardKey.escape:
+        print("Pressed ESC");
+        if (widget.presenter.selection.value?.isExpanded == true) {
+          print("Collapsing selection");
+          widget.presenter.selection.value = CodeSelection.collapsed(widget.presenter.selection.value!.extent);
+          return KeyEventResult.handled;
+        }
+
+        return KeyEventResult.ignored;
       case LogicalKeyboardKey.keyA:
         if (HardwareKeyboard.instance.isMetaPressed) {
           widget.presenter.selection.value = CodeSelection(
