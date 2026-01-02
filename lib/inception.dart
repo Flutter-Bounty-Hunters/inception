@@ -12,6 +12,8 @@ export 'src/editor/code_editor.dart';
 export 'src/editor/code_layout.dart';
 export 'src/editor/theme.dart';
 
+export 'src/infrastructure/text/code_comment_selection_rules.dart';
+
 export 'src/languages/dart/dart_contextualizer.dart';
 export 'src/languages/dart/dart_lexer.dart';
 export 'src/languages/dart/dart_syntax_highlighter.dart';

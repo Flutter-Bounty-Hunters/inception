@@ -1,7 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:inception/inception.dart';
+import 'package:inception/src/document/code_document.dart';
+import 'package:inception/src/document/lexing.dart';
+import 'package:inception/src/document/selection.dart';
+import 'package:inception/src/document/syntax_highlighter.dart';
+import 'package:inception/src/editor/code_layout.dart';
+import 'package:inception/src/editor/theme.dart';
+import 'package:inception/src/infrastructure/text/code_comment_selection_rules.dart';
 
 class CodeEditor extends StatefulWidget {
   const CodeEditor({
@@ -10,6 +16,7 @@ class CodeEditor extends StatefulWidget {
     required this.style,
   });
 
+  // TODO: The presenter handles the double click, so it should know the Dart vs Luau comment syntax
   final CodeEditorPresenter presenter;
   final CodeEditorStyle style;
 
@@ -86,7 +93,6 @@ class _CodeEditorState extends State<CodeEditor> {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final newExtent = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition).$1;
 
-    // print("New extent: $newExtent");
     widget.presenter.selection.value = CodeSelection(base: _dragStartPosition!, extent: newExtent);
 
     _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
@@ -351,13 +357,18 @@ class CodeEditorPresenter {
 
   void onDoubleClickAt(CodePosition codePosition, TextAffinity affinity) {
     LexerToken? clickedToken = _document.findTokenAt(codePosition);
-    if (clickedToken == null) {
-      return;
-    }
 
-    if (clickedToken.kind == SyntaxKind.whitespace) {
-      // We don't want to select whitespace on double-click. Find a nearby token and
-      // select that instead.
+    if (clickedToken == null ||
+        (clickedToken.kind == SyntaxKind.whitespace &&
+            _document.offsetToCodePosition(clickedToken.start).characterOffset > 0)) {
+      // We don't want to select whitespace in the middle of a code line on double-click.
+      // Find a nearby token and select that instead.
+      //
+      // Note: Some lexers might choose not to tokenize whitespace, in which case whitespace
+      // will have a null token.
+      //
+      // Note: We exclude cases where the token starts at offset `0` because that space is
+      // indentation space, and we DO want to double click to select that.
       if (affinity == TextAffinity.downstream || codePosition.characterOffset == 0) {
         // Either we double clicked on the downstream edge of a character, or at the start of
         // a line. Select to the right.
@@ -372,6 +383,22 @@ class CodeEditorPresenter {
         // We couldn't find a nearby non-whitespace token.
         return;
       }
+    }
+
+    if (clickedToken.kind == SyntaxKind.comment) {
+      final line = _document.getLine(codePosition.line)!;
+      final wordRange = CodeCommentSelection.findNearestSelectableToken(
+        line,
+        codePosition.characterOffset,
+        affinity,
+        ["///", "//"],
+      );
+
+      selection.value = CodeSelection(
+        base: CodePosition(codePosition.line, wordRange.start),
+        extent: CodePosition(codePosition.line, wordRange.end),
+      );
+      return;
     }
 
     selection.value = CodeSelection(

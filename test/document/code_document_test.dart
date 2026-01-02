@@ -156,7 +156,7 @@ void main() {
       }
     });
 
-    test('mapping at line boundaries', () {
+    test('mapping at line boundaries from document offset to CodePosition', () {
       final doc = CodeDocument(FakeLexer(), 'a\nbb\nccc');
 
       expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
@@ -164,6 +164,22 @@ void main() {
       expect(doc.offsetToCodePosition(2), const CodePosition(1, 0));
       expect(doc.offsetToCodePosition(4), const CodePosition(1, 2));
       expect(doc.offsetToCodePosition(5), const CodePosition(2, 0));
+    });
+
+    test('mapping at line boundaries from CodePosition to document offset', () {
+      final doc = CodeDocument(FakeLexer(), 'a\nbb\nccc');
+
+      // Line 0
+      expect(doc.lineColumnToOffset(0, 0), 0);
+      expect(doc.lineColumnToOffset(0, 1), 1);
+
+      // Line 1
+      expect(doc.lineColumnToOffset(1, 0), 2);
+      expect(doc.lineColumnToOffset(1, 2), 4);
+
+      // Line 2
+      expect(doc.lineColumnToOffset(2, 0), 5);
+      expect(doc.lineColumnToOffset(2, 3), 8);
     });
   });
 }

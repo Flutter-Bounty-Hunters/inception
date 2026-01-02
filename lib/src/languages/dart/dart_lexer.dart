@@ -32,6 +32,12 @@ class DartLexer implements Lexer {
       final int tokenStart = index;
       final String char = source[index];
 
+      if (char == '\n') {
+        // Don't tokenize newlines.
+        index += 1;
+        continue;
+      }
+
       // Whitespace
       if (_isWhitespace(char)) {
         index++;

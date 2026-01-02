@@ -112,5 +112,12 @@ void main() {
       expect(doc.tokens, isNotEmpty);
       expect(doc.length, equals(doc.text.length));
     });
+
+    test('does not tokenize newlines', () {
+      doc.replaceRange(0, 0, 'var example = 42;\nvar sample = 99;');
+
+      expect(doc.tokens[7], const LexerToken(16, 17, SyntaxKind.punctuation));
+      expect(doc.tokens[8], const LexerToken(18, 21, SyntaxKind.keyword));
+    });
   });
 }
