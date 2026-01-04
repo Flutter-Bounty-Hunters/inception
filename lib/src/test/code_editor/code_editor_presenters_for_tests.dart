@@ -43,9 +43,15 @@ class TestCodeEditorPresenter implements CodeEditorPresenter {
   final ValueNotifier<CodeSelection?> selection;
 
   @override
-  void onClickDownAt(CodePosition codePosition, TextAffinity affinity) {
-    // Place the caret.
-    selection.value = CodeSelection.collapsed(codePosition);
+  void onClickDownAt(
+    CodePosition codePosition,
+    TextAffinity affinity, {
+    bool expand = false,
+  }) {
+    selection.value = CodeSelection(
+      base: expand && selection.value != null ? selection.value!.base : codePosition,
+      extent: codePosition,
+    );
   }
 
   @override

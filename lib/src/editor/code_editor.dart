@@ -70,7 +70,7 @@ class _CodeEditorState extends State<CodeEditor> {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
 
-    widget.presenter.onClickDownAt(codeTapPosition, affinity);
+    widget.presenter.onClickDownAt(codeTapPosition, affinity, expand: HardwareKeyboard.instance.isShiftPressed);
 
     _updatePreferredCaretXOffsetToMatchCurrentCaretOffset();
 
@@ -678,8 +678,15 @@ abstract class CodeEditorPresenter {
 
   final ValueNotifier<CodeSelection?> selection = ValueNotifier(null);
 
-  void onClickDownAt(CodePosition codePosition, TextAffinity affinity) {
-    selection.value = CodeSelection.collapsed(codePosition);
+  void onClickDownAt(
+    CodePosition codePosition,
+    TextAffinity affinity, {
+    bool expand = false,
+  }) {
+    selection.value = CodeSelection(
+      base: expand && selection.value != null ? selection.value!.base : codePosition,
+      extent: codePosition,
+    );
   }
 
   void onDoubleClickDownAt(CodePosition codePosition, TextAffinity affinity) {
