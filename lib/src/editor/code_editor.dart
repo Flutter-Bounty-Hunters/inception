@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:inception/inception.dart';
 import 'package:inception/src/document/selection.dart';
 import 'package:inception/src/editor/code_layout.dart';
 import 'package:inception/src/editor/theme.dart';
@@ -28,10 +31,13 @@ class _CodeEditorState extends State<CodeEditor> {
   late FocusNode _focusNode;
 
   final _codeLayoutKey = GlobalKey(debugLabel: 'code-layout');
+  final _verticalScrollController = ScrollController();
 
   /// The preferred x-offset from the left side of the editor when the user
   /// moves the caret up/down lines.
   double? _preferredCaretXOffset;
+
+  double? _scrollAnimationTargetOffset;
 
   @override
   void initState() {
@@ -54,6 +60,9 @@ class _CodeEditorState extends State<CodeEditor> {
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
+
+    _verticalScrollController.dispose();
+
     super.dispose();
   }
 
@@ -157,9 +166,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
     switch (keyEvent.logicalKey) {
       case LogicalKeyboardKey.escape:
-        print("Pressed ESC");
         if (widget.presenter.selection.value?.isExpanded == true) {
-          print("Collapsing selection");
           widget.presenter.selection.value = CodeSelection.collapsed(widget.presenter.selection.value!.extent);
           return KeyEventResult.handled;
         }
@@ -179,6 +186,116 @@ class _CodeEditorState extends State<CodeEditor> {
         }
 
         return KeyEventResult.ignored;
+      case LogicalKeyboardKey.pageUp:
+        final scrollPosition = _verticalScrollController.position;
+        final scrollAnimationTargetOffset =
+            max((_scrollAnimationTargetOffset ?? scrollPosition.pixels) - scrollPosition.viewportDimension, 0.0);
+        _scrollAnimationTargetOffset = scrollAnimationTargetOffset;
+
+        scrollPosition
+            .animateTo(
+          _scrollAnimationTargetOffset!,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        )
+            .then((_) {
+          if (_scrollAnimationTargetOffset == scrollAnimationTargetOffset) {
+            // Still targeting the same offset (no other animation started since then).
+            // We're now at the destination. Clear it.
+            _scrollAnimationTargetOffset = null;
+          }
+        });
+
+        final newViewportTop = _scrollAnimationTargetOffset!;
+        final newViewportBottom = _scrollAnimationTargetOffset! + scrollPosition.viewportDimension;
+
+        final selection = widget.presenter.selection.value;
+        final codeLineHeight = _codeLayout.codeLineHeight;
+        if (selection != null && codeLineHeight != null && codeLineHeight > 0) {
+          final linesPerPage = scrollPosition.viewportDimension ~/ codeLineHeight;
+
+          var newExtentLine = max(selection.extent.line - linesPerPage, 0);
+          final estimatedNewLineYOffset = newExtentLine * codeLineHeight;
+          if (newExtentLine > 0 && estimatedNewLineYOffset < (newViewportTop + 100)) {
+            newExtentLine = min(newExtentLine + 2, widget.presenter.lineCount - 1);
+          } else if (newExtentLine < widget.presenter.lineCount - 1 &&
+              estimatedNewLineYOffset > (newViewportBottom - 100)) {
+            newExtentLine = max(newExtentLine - 2, 0);
+          }
+
+          final newExtentOffset = selection.extent.line > 0
+              ? min(selection.extent.characterOffset, widget.presenter.getLineLength(newExtentLine))
+              : 0;
+
+          if (HardwareKeyboard.instance.isShiftPressed) {
+            widget.presenter.selection.value = CodeSelection(
+              base: selection.base,
+              extent: CodePosition(newExtentLine, newExtentOffset),
+            );
+          } else {
+            widget.presenter.selection.value = CodeSelection.collapsed(
+              CodePosition(newExtentLine, newExtentOffset),
+            );
+          }
+        }
+
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.pageDown:
+        final scrollPosition = _verticalScrollController.position;
+        final scrollAnimationTargetOffset = min(
+          (_scrollAnimationTargetOffset ?? scrollPosition.pixels) + scrollPosition.viewportDimension,
+          scrollPosition.maxScrollExtent,
+        );
+        _scrollAnimationTargetOffset = scrollAnimationTargetOffset;
+
+        scrollPosition
+            .animateTo(
+          _scrollAnimationTargetOffset!,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        )
+            .then((_) {
+          if (_scrollAnimationTargetOffset == scrollAnimationTargetOffset) {
+            // Still targeting the same offset (no other animation started since then).
+            // We're now at the destination. Clear it.
+            _scrollAnimationTargetOffset = null;
+          }
+        });
+
+        final newViewportTop = _scrollAnimationTargetOffset!;
+        final newViewportBottom = _scrollAnimationTargetOffset! + scrollPosition.viewportDimension;
+
+        final selection = widget.presenter.selection.value;
+        final codeLineHeight = _codeLayout.codeLineHeight;
+        if (selection != null && codeLineHeight != null && codeLineHeight > 0) {
+          final linesPerPage = scrollPosition.viewportDimension ~/ codeLineHeight;
+
+          var newExtentLine = min(selection.extent.line + linesPerPage, widget.presenter.lineCount - 1);
+          final estimatedNewLineYOffset = newExtentLine * codeLineHeight;
+          if (newExtentLine > 0 && estimatedNewLineYOffset < (newViewportTop + 100)) {
+            newExtentLine = min(newExtentLine + 2, widget.presenter.lineCount - 1);
+          } else if (newExtentLine < widget.presenter.lineCount - 1 &&
+              estimatedNewLineYOffset > (newViewportBottom - 100)) {
+            newExtentLine = max(newExtentLine - 2, 0);
+          }
+
+          final newExtentOffset = selection.extent.line == widget.presenter.lineCount - 1
+              ? min(selection.extent.characterOffset, widget.presenter.getLineLength(newExtentLine))
+              : widget.presenter.getLineLength(newExtentLine);
+
+          if (HardwareKeyboard.instance.isShiftPressed) {
+            widget.presenter.selection.value = CodeSelection(
+              base: selection.base,
+              extent: CodePosition(newExtentLine, newExtentOffset),
+            );
+          } else {
+            widget.presenter.selection.value = CodeSelection.collapsed(
+              CodePosition(newExtentLine, newExtentOffset),
+            );
+          }
+        }
+
+        return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowLeft:
         final selection = widget.presenter.selection.value;
         if (selection == null) {
@@ -276,11 +393,13 @@ class _CodeEditorState extends State<CodeEditor> {
           if (selection.extent.characterOffset == 0) {
             // Jump to previous line.
             if (selection.extent.line > 0) {
-              widget.presenter.selection.value = CodeSelection.collapsed(
-                CodePosition(
-                  selection.extent.line - 1,
-                  widget.presenter.codeLines.value[selection.extent.line - 1].toPlainText().length,
-                ),
+              final newExtent = CodePosition(
+                selection.extent.line - 1,
+                widget.presenter.codeLines.value[selection.extent.line - 1].toPlainText().length,
+              );
+              widget.presenter.selection.value = CodeSelection(
+                base: HardwareKeyboard.instance.isShiftPressed ? selection.base : newExtent,
+                extent: newExtent,
               );
             }
           } else {
@@ -309,7 +428,25 @@ class _CodeEditorState extends State<CodeEditor> {
             widget.presenter.selection.value = CodeSelection.collapsed(
               CodePosition(selection.extent.line + 1, 0),
             );
+
+            final newExtent = CodePosition(selection.extent.line + 1, 0);
+            widget.presenter.selection.value = CodeSelection(
+              base: HardwareKeyboard.instance.isShiftPressed ? selection.base : newExtent,
+              extent: newExtent,
+            );
           }
+        default:
+          throw Exception("Push direction said it was horizontal, but it wasn't.");
+      }
+      return;
+    }
+
+    if (HardwareKeyboard.instance.isAltPressed && direction.isHorizontal) {
+      switch (direction) {
+        case _SelectionDirection.left:
+          widget.presenter.moveCaretAheadOfTokenBefore(selection.extent);
+        case _SelectionDirection.right:
+          widget.presenter.moveCaretToEndOfTokenAfter(selection.extent);
         default:
           throw Exception("Push direction said it was horizontal, but it wasn't.");
       }
@@ -394,6 +531,18 @@ class _CodeEditorState extends State<CodeEditor> {
       return;
     }
 
+    if (HardwareKeyboard.instance.isAltPressed && direction.isHorizontal) {
+      switch (direction) {
+        case _SelectionDirection.left:
+          widget.presenter.moveCaretAheadOfTokenBefore(selection.extent, expand: true);
+        case _SelectionDirection.right:
+          widget.presenter.moveCaretToEndOfTokenAfter(selection.extent, expand: true);
+        default:
+          throw Exception("Push direction said it was horizontal, but it wasn't.");
+      }
+      return;
+    }
+
     // The selection might be collapsed or expanded, but we know the SHIFT key is
     // pressed, so we want to expand the selection either way.
     final newExtent = switch (direction) {
@@ -429,6 +578,22 @@ class _CodeEditorState extends State<CodeEditor> {
     };
 
     widget.presenter.selection.value = CodeSelection.collapsed(collapsedPosition);
+
+    final codeLineHeight = _codeLayout.codeLineHeight;
+    if (codeLineHeight != null) {
+      final expectedCaretVerticalOffset = codeLineHeight * collapsedPosition.line;
+
+      final viewportHeight = _verticalScrollController.position.viewportDimension;
+      final viewportTop = _verticalScrollController.offset;
+      final viewportBottom = _verticalScrollController.offset + viewportHeight;
+
+      if (expectedCaretVerticalOffset < (viewportTop + 100) || expectedCaretVerticalOffset > (viewportBottom - 100)) {
+        final adjustedScrollOffset = expectedCaretVerticalOffset - (viewportHeight / 2);
+        _verticalScrollController.jumpTo(
+          min(max(adjustedScrollOffset, 0), _verticalScrollController.position.maxScrollExtent),
+        );
+      }
+    }
   }
 
   void _updatePreferredCaretXOffsetToMatchCurrentCaretOffset() {
@@ -476,6 +641,7 @@ class _CodeEditorState extends State<CodeEditor> {
             builder: (context, child) {
               return CodeLines(
                 key: _codeLayoutKey,
+                verticalScrollController: _verticalScrollController,
                 codeLines: widget.presenter.codeLines.value,
                 selection: widget.presenter.selection.value,
                 style: CodeLinesStyle(
@@ -495,23 +661,235 @@ class _CodeEditorState extends State<CodeEditor> {
 }
 
 abstract class CodeEditorPresenter {
+  CodeEditorPresenter(this.document);
+
   void dispose();
 
-  int get lineCount;
+  @protected
+  final CodeDocument document;
 
-  int getLineLength(int lineIndex);
+  int get lineCount => document.lineCount;
 
-  int getLineIndent(int lineIndex);
+  int getLineLength(int lineIndex) => document.getLine(lineIndex)!.length;
+
+  int getLineIndent(int lineIndex) => RegExp(r"^(\s*)").firstMatch(document.getLine(lineIndex)!)!.end;
 
   ValueListenable<List<TextSpan>> get codeLines;
 
-  ValueNotifier<CodeSelection?> get selection;
+  final ValueNotifier<CodeSelection?> selection = ValueNotifier(null);
 
-  void onClickDownAt(CodePosition codePosition, TextAffinity affinity);
+  void onClickDownAt(CodePosition codePosition, TextAffinity affinity) {
+    selection.value = CodeSelection.collapsed(codePosition);
+  }
 
-  void onDoubleClickDownAt(CodePosition codePosition, TextAffinity affinity);
+  void onDoubleClickDownAt(CodePosition codePosition, TextAffinity affinity) {
+    LexerToken? clickedToken = document.findTokenAt(codePosition);
 
-  void onTripleClickDownAt(CodePosition codePosition, TextAffinity affinity);
+    if (clickedToken == null ||
+        (clickedToken.kind == SyntaxKind.whitespace &&
+            document.offsetToCodePosition(clickedToken.start).characterOffset > 0)) {
+      // We don't want to select whitespace in the middle of a code line on double-click.
+      // Find a nearby token and select that instead.
+      //
+      // Note: Some lexers might choose not to tokenize whitespace, in which case whitespace
+      // will have a null token.
+      //
+      // Note: We exclude cases where the token starts at offset `0` because that space is
+      // indentation space, and we DO want to double click to select that.
+      if (affinity == TextAffinity.downstream || codePosition.characterOffset == 0) {
+        // Either we double clicked on the downstream edge of a character, or at the start of
+        // a line. Select to the right.
+        clickedToken = document.findTokenToTheRightOnSameLine(codePosition, filter: nonWhitespace);
+      } else {
+        // Either we double clicked on the upstream edge of a character, or at the end of a line.
+        // Select to the left.
+        clickedToken = document.findTokenToTheLeftOnSameLine(codePosition, filter: nonWhitespace);
+      }
+
+      if (clickedToken == null) {
+        // We couldn't find a nearby non-whitespace token.
+        return;
+      }
+    }
+
+    if (clickedToken.kind == SyntaxKind.comment) {
+      final line = document.getLine(codePosition.line)!;
+      final wordRange = CodeCommentSelection.findNearestSelectableToken(
+        line,
+        codePosition.characterOffset,
+        affinity,
+        ["///", "//"],
+      );
+
+      selection.value = CodeSelection(
+        base: CodePosition(codePosition.line, wordRange.start),
+        extent: CodePosition(codePosition.line, wordRange.end),
+      );
+      return;
+    }
+
+    selection.value = CodeSelection(
+      base: document.offsetToCodePosition(clickedToken.start),
+      extent: document.offsetToCodePosition(clickedToken.end),
+    );
+  }
+
+  void onTripleClickDownAt(CodePosition codePosition, TextAffinity affinity) {
+    // Select the whole line.
+    selection.value = CodeSelection(
+      base: CodePosition(codePosition.line, 0),
+      extent: CodePosition(codePosition.line, document.getLine(codePosition.line)!.length),
+    );
+  }
+
+  void moveCaretAheadOfTokenBefore(
+    CodePosition searchStart, {
+    bool expand = false,
+  }) {
+    final currentSelection = selection.value;
+    if (currentSelection == null) {
+      return;
+    }
+
+    if (searchStart.characterOffset == 0) {
+      // Jump to previous line.
+      if (searchStart.line > 0) {
+        final newExtent = CodePosition(
+          searchStart.line - 1,
+          document.getLine(searchStart.line - 1)!.length,
+        );
+        selection.value = CodeSelection(
+          base: expand ? currentSelection.base : newExtent,
+          extent: newExtent,
+        );
+      }
+      return;
+    }
+
+    final tokenAtOffset = document.findTokenAt(searchStart);
+    if (tokenAtOffset != null) {
+      if (tokenAtOffset.kind != SyntaxKind.comment) {
+        final startOfCurrentTokenPosition = document.offsetToCodePosition(tokenAtOffset.start);
+        if (searchStart != startOfCurrentTokenPosition) {
+          selection.value = CodeSelection(
+            base: expand ? currentSelection.base : startOfCurrentTokenPosition,
+            extent: startOfCurrentTokenPosition,
+          );
+          return;
+        }
+      } else {
+        // We're moving the caret within a comment.
+        final commentLine = document.getLine(searchStart.line)!;
+        final newCommentOffset = CodeCommentSelection.findCaretOffsetAheadOfTokenBefore(
+          commentLine,
+          ["//", "///"],
+          searchStart.characterOffset,
+        );
+        if (newCommentOffset != searchStart.characterOffset) {
+          final newPosition = CodePosition(searchStart.line, newCommentOffset);
+          selection.value = CodeSelection(
+            base: expand ? currentSelection.base : newPosition,
+            extent: newPosition,
+          );
+          return;
+        }
+      }
+    }
+
+    final upstreamTokenDocumentRange = document.findTokenToTheLeftOnSameLine(searchStart, filter: nonWhitespace);
+    if (upstreamTokenDocumentRange != null) {
+      if (upstreamTokenDocumentRange.kind != SyntaxKind.comment) {
+        final newExtentPosition = document.offsetToCodePosition(upstreamTokenDocumentRange.start);
+        selection.value = CodeSelection(
+          base: expand ? currentSelection.base : newExtentPosition,
+          extent: newExtentPosition,
+        );
+        return;
+      } else {
+        // This line is a comment. Jump by word, not by token.
+        final commentLine = document.getLine(searchStart.line)!;
+        final newCommentOffset = CodeCommentSelection.findCaretOffsetAheadOfTokenBefore(
+          commentLine,
+          ["//", "///"],
+          searchStart.characterOffset,
+        );
+        if (newCommentOffset != searchStart.characterOffset) {
+          final newPosition = CodePosition(searchStart.line, newCommentOffset);
+          selection.value = CodeSelection(
+            base: expand ? currentSelection.base : newPosition,
+            extent: newPosition,
+          );
+          return;
+        }
+      }
+    }
+  }
+
+  void moveCaretToEndOfTokenAfter(
+    CodePosition searchStart, {
+    bool expand = false,
+  }) {
+    final currentSelection = selection.value;
+    if (currentSelection == null) {
+      return;
+    }
+
+    if (searchStart.characterOffset >= document.getLine(searchStart.line)!.length) {
+      if (searchStart.line < document.lineCount - 1) {
+        // Move caret to start of next line.
+        final newExtent = CodePosition(searchStart.line + 1, 0);
+        selection.value = CodeSelection(
+          base: expand ? currentSelection.base : newExtent,
+          extent: newExtent,
+        );
+      }
+      return;
+    }
+
+    final tokenAtOffset = document.findTokenAt(searchStart);
+    if (tokenAtOffset != null) {
+      if (tokenAtOffset.kind != SyntaxKind.comment) {
+        final endOfCurrentTokenPosition = document.offsetToCodePosition(tokenAtOffset.end);
+        if (searchStart != endOfCurrentTokenPosition) {
+          selection.value = CodeSelection(
+            base: expand ? currentSelection.base : endOfCurrentTokenPosition,
+            extent: endOfCurrentTokenPosition,
+          );
+          return;
+        }
+      } else {
+        // We're moving the caret within a comment.
+        final commentLine = document.getLine(searchStart.line)!;
+        final newCommentOffset = CodeCommentSelection.findCaretOffsetAtEndOfTokenAfter(
+          commentLine,
+          ["//", "///"],
+          searchStart.characterOffset,
+        );
+        if (newCommentOffset != searchStart.characterOffset) {
+          final newPosition = CodePosition(searchStart.line, newCommentOffset);
+          selection.value = CodeSelection(
+            base: expand ? currentSelection.base : newPosition,
+            extent: newPosition,
+          );
+          return;
+        }
+      }
+    }
+
+    final downstreamTokenDocumentRange = document.findTokenToTheRightOnSameLine(searchStart, filter: nonWhitespace);
+    if (downstreamTokenDocumentRange != null) {
+      final newExtentPosition = document.offsetToCodePosition(downstreamTokenDocumentRange.end);
+      selection.value = CodeSelection(
+        base: expand ? currentSelection.base : newExtentPosition,
+        extent: newExtentPosition,
+      );
+      return;
+    }
+  }
+}
+
+bool nonWhitespace(LexerToken token, CodePosition position) {
+  return token.kind != SyntaxKind.whitespace;
 }
 
 enum _SelectionDirection {

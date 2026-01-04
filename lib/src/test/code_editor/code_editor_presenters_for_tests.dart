@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:inception/src/document/code_document.dart';
 import 'package:inception/src/document/selection.dart';
 import 'package:inception/src/editor/code_editor.dart';
 
@@ -22,6 +23,9 @@ class TestCodeEditorPresenter implements CodeEditorPresenter {
     codeLines.dispose();
     selection.dispose();
   }
+
+  @override
+  CodeDocument get document => throw UnimplementedError();
 
   @override
   int get lineCount => codeLines.value.length;
@@ -53,4 +57,16 @@ class TestCodeEditorPresenter implements CodeEditorPresenter {
   void onTripleClickDownAt(CodePosition codePosition, TextAffinity affinity) {
     // No-op.
   }
+
+  @override
+  void moveCaretAheadOfTokenBefore(
+    CodePosition searchStart, {
+    bool expand = false,
+  }) {}
+
+  @override
+  void moveCaretToEndOfTokenAfter(
+    CodePosition searchStart, {
+    bool expand = false,
+  }) {}
 }

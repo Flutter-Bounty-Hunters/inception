@@ -20,6 +20,7 @@ import 'package:super_text_layout/super_text_layout.dart';
 class CodeLines extends StatefulWidget {
   const CodeLines({
     super.key,
+    this.verticalScrollController,
     required this.codeLines,
     this.shadowCaretPosition,
     this.selection,
@@ -27,6 +28,8 @@ class CodeLines extends StatefulWidget {
     // this.perLineUnderlays = const [],
     required this.style,
   });
+
+  final ScrollController? verticalScrollController;
 
   /// All lines of source code, with syntax highlighting already applied.
   final List<TextSpan> codeLines;
@@ -46,10 +49,44 @@ class CodeLines extends StatefulWidget {
 }
 
 class CodeLinesState extends State<CodeLines> implements CodeLayout {
+  late ScrollController _verticalScrollController;
+
   // We track the previous frame line keys so we know which lines disappeared
   // since the last frame and can clear them from `_lineKeys`.
   final _previousFrameLineKeys = <int, GlobalKey>{};
   final _lineKeys = <int, GlobalKey>{};
+
+  @override
+  void initState() {
+    super.initState();
+
+    _verticalScrollController = widget.verticalScrollController ?? ScrollController();
+  }
+
+  @override
+  void didUpdateWidget(CodeLines oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.verticalScrollController != oldWidget.verticalScrollController) {
+      if (oldWidget.verticalScrollController == null) {
+        _verticalScrollController.dispose();
+      }
+
+      _verticalScrollController = widget.verticalScrollController ?? ScrollController();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.verticalScrollController == null) {
+      _verticalScrollController.dispose();
+    }
+
+    super.dispose();
+  }
+
+  double? get codeLineHeight => _codeLineHeight;
+  double? _codeLineHeight;
 
   CodePosition? get caretPosition => widget.selection?.extent;
 
@@ -331,6 +368,9 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
         cursor: SystemMouseCursors.text,
         child: widget.codeLines.isNotEmpty
             ? CodeScroller(
+                verticalDetails: ScrollableDetails.vertical(
+                  controller: _verticalScrollController,
+                ),
                 delegate: TwoDimensionalChildBuilderDelegate(
                   maxXIndex: 1,
                   maxYIndex: widget.codeLines.length - 1,
@@ -342,6 +382,7 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
                     return _buildCodeLine(vicinity.yIndex);
                   },
                 ),
+                onCodeLineHeightMeasured: (codeLineHeight) => _codeLineHeight = codeLineHeight,
               )
             : const SizedBox(),
       ),
@@ -1115,7 +1156,10 @@ class CodeScroller extends TwoDimensionalScrollView {
     super.dragStartBehavior = DragStartBehavior.start,
     super.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
     super.clipBehavior = Clip.hardEdge,
+    this.onCodeLineHeightMeasured,
   }) : super(delegate: delegate);
+
+  final void Function(double codeLineHeight)? onCodeLineHeightMeasured;
 
   @override
   Widget buildViewport(
@@ -1132,6 +1176,7 @@ class CodeScroller extends TwoDimensionalScrollView {
       delegate: delegate as TwoDimensionalChildBuilderDelegate,
       cacheExtent: cacheExtent,
       clipBehavior: clipBehavior,
+      onCodeLineHeightMeasured: onCodeLineHeightMeasured,
     );
   }
 }
@@ -1147,7 +1192,10 @@ class CodeScrollerViewport extends TwoDimensionalViewport {
     required super.mainAxis,
     super.cacheExtent,
     super.clipBehavior = Clip.hardEdge,
+    this.onCodeLineHeightMeasured,
   });
+
+  final void Function(double codeLineHeight)? onCodeLineHeightMeasured;
 
   @override
   RenderTwoDimensionalViewport createRenderObject(BuildContext context) {
@@ -1161,6 +1209,7 @@ class CodeScrollerViewport extends TwoDimensionalViewport {
       childManager: context as TwoDimensionalChildManager,
       cacheExtent: cacheExtent,
       clipBehavior: clipBehavior,
+      onCodeLineHeightMeasured: onCodeLineHeightMeasured,
     );
   }
 
@@ -1192,12 +1241,15 @@ class RenderCodeScrollerViewport extends RenderTwoDimensionalViewport {
     required super.childManager,
     super.cacheExtent,
     super.clipBehavior = Clip.hardEdge,
+    this.onCodeLineHeightMeasured,
   }) : super(delegate: delegate);
 
   final LayerHandle<ClipRectLayer> _clipRectLayer = LayerHandle<ClipRectLayer>();
 
   late ChildVicinity _leadingVicinity;
   late ChildVicinity _trailingVicinity;
+
+  final void Function(double codeLineHeight)? onCodeLineHeightMeasured;
 
   @override
   void dispose() {
@@ -1233,6 +1285,7 @@ class RenderCodeScrollerViewport extends RenderTwoDimensionalViewport {
     childrenCache[firstLineVicinity] = buildOrObtainChildFor(firstLineVicinity)!;
     childrenCache[firstLineVicinity]!.layout(BoxConstraints(), parentUsesSize: true);
     lineHeight = childrenCache[firstLineVicinity]!.size.height;
+    onCodeLineHeightMeasured?.call(lineHeight);
     final firstCachedLineIndex = max(verticalPixels - cacheExtent, 0) ~/ lineHeight;
     final lastCachedLineIndex = min(((verticalPixels + viewportHeight + cacheExtent) / lineHeight).ceil(), maxRowIndex);
 

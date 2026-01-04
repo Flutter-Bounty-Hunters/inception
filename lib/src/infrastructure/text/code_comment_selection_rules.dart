@@ -61,8 +61,129 @@ abstract class CodeCommentSelection {
         TextRange(start: clickOffset, end: clickOffset);
   }
 
+  static int findCaretOffsetAheadOfTokenBefore(
+    String line,
+    List<String> commentLineStartSyntaxes,
+    int searchStart,
+  ) {
+    if (searchStart == 0) {
+      return 0;
+    }
+
+    final leadingSpace = line.length - line.trimLeft().length;
+    if (searchStart <= leadingSpace) {
+      // Jump to start of line.
+      return 0;
+    }
+
+    var realSearchStart = searchStart;
+    while (realSearchStart > 0 && line[realSearchStart - 1] == ' ') {
+      realSearchStart -= 1;
+    }
+
+    // Handle case where search offset is in the middle of, or end of, the comment
+    // line initiation syntax, e.g., "//" in Dart.
+    final nearbyCodeCommentSyntaxRange =
+        _maybeFindCommentSyntaxAroundOffset(line, realSearchStart, commentLineStartSyntaxes);
+    if (nearbyCodeCommentSyntaxRange != null && realSearchStart != nearbyCodeCommentSyntaxRange.start) {
+      // Jump to the start of the comment syntax.
+      return nearbyCodeCommentSyntaxRange.start;
+    }
+
+    // Handle case where search offset is in the middle of a word.
+    final currentWordRange = _applyWordBoundary(line, realSearchStart, TextAffinity.upstream);
+    if (currentWordRange != null && realSearchStart != currentWordRange.start) {
+      // Return the start of the currently selected token.
+      return currentWordRange.start;
+    }
+
+    // Handle case where search offset already sits at leading edge of a word.
+    if (currentWordRange != null && realSearchStart == currentWordRange.start && realSearchStart > 0) {
+      // The search offset is already at the lead edge of a token. Find the next
+      // token upstream and return its edge.
+      final upstreamWordRange = _applyWordBoundary(line, realSearchStart - 1, TextAffinity.upstream);
+
+      if (upstreamWordRange != null) {
+        // Return the start of the upstream token.
+        return upstreamWordRange.start;
+      }
+    }
+
+    return realSearchStart;
+  }
+
+  static int findCaretOffsetAtEndOfTokenAfter(
+    String line,
+    List<String> commentLineStartSyntaxes,
+    int searchStart,
+  ) {
+    if (searchStart >= line.length) {
+      return searchStart;
+    }
+
+    final leadingSpace = line.length - line.trimLeft().length;
+    if (searchStart <= leadingSpace) {
+      // Search offset is in indentation space. Jump to end of comment syntax.
+      final commentSyntaxRange = _maybeFindCommentSyntaxAroundOffset(line, leadingSpace + 1, commentLineStartSyntaxes);
+      if (commentSyntaxRange == null) {
+        if (line[searchStart] == ' ') {
+          // This is probably a line in a multi-line comment, which has no comment
+          // syntax at all. Jump past all the indentation.
+          return leadingSpace;
+        } else {
+          // This shouldn't happen, but it might happen if a language doesn't pass in the
+          // correct comment syntax, e.g., pass Dart syntax "//" when it should be Luau
+          // syntax "--".
+          //
+          // Move forward by one character as a reasonable backup behavior.
+          return searchStart + 1;
+        }
+      }
+
+      return commentSyntaxRange.end;
+    }
+
+    final nearestWordRange = _applyWordBoundary(line, searchStart, TextAffinity.downstream);
+    if (nearestWordRange != null && searchStart != nearestWordRange.end) {
+      return nearestWordRange.end;
+    }
+
+    return searchStart;
+  }
+
+  /// Check if the given [offset] sits in the middle of, or edge of, the given [commentLineStartSyntaxes],
+  /// e.g., "/|/" or "//|" in Dart.
+  ///
+  /// This query is helpful when jumping tokens upstream and downstream, as well as selecting entire tokens, because
+  /// the comment syntax should be jumped or selected all as one token, rather than treated as a series of
+  /// independent slashes "/" or dashes "-", etc.
+  static TextRange? _maybeFindCommentSyntaxAroundOffset(
+    String codeCommentLine,
+    int offset,
+    List<String> commentLineStartSyntaxes,
+  ) {
+    for (final startSyntax in commentLineStartSyntaxes) {
+      final startRegExp = RegExp("\\s*($startSyntax)");
+      final match = startRegExp.firstMatch(codeCommentLine);
+      if (match != null) {
+        // This line begins with the given `startSyntax`. Now, check if the click offset
+        // is somewhere in that starting syntax.
+        final leadingSpaceCount = codeCommentLine.length - codeCommentLine.trimLeft().length;
+        if (leadingSpaceCount <= offset && offset <= match.end) {
+          return TextRange(start: leadingSpaceCount, end: match.end);
+        }
+      }
+    }
+
+    return null;
+  }
+
   static TextRange? _applyWordBoundary(String text, int offset, TextAffinity affinity) {
-    if (_boundaryRegex.hasMatch(text[offset])) {
+    if (offset > text.length) {
+      return null;
+    }
+
+    if (offset < text.length && _boundaryRegex.hasMatch(text[offset])) {
       if (text[offset] != ' ') {
         // User selected a non-word character, which also isn't a space.
         // Select just this character.
