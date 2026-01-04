@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inception/inception.dart';
+import 'package:inception/language_dart.dart';
 
 void main() {
   group('CodeDocument tokenization', () {

@@ -348,21 +348,21 @@ void main() {
         async.elapse(CodeDocument.batchInterval);
 
         expect(doc.text, 'aX\nY\nb\nc');
-        expect(doc.offsetToLineColumn(0), (0, 0));
-        expect(doc.offsetToLineColumn(3), (1, 0));
-        expect(doc.offsetToLineColumn(5), (2, 0));
+        expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
+        expect(doc.offsetToCodePosition(3), const CodePosition(1, 0));
+        expect(doc.offsetToCodePosition(5), const CodePosition(2, 0));
 
         doc.undo();
         expect(doc.text, 'a\nb\nc');
-        expect(doc.offsetToLineColumn(0), (0, 0));
-        expect(doc.offsetToLineColumn(2), (1, 0));
-        expect(doc.offsetToLineColumn(4), (2, 0));
+        expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
+        expect(doc.offsetToCodePosition(2), const CodePosition(1, 0));
+        expect(doc.offsetToCodePosition(4), const CodePosition(2, 0));
 
         doc.redo();
         expect(doc.text, 'aX\nY\nb\nc');
-        expect(doc.offsetToLineColumn(0), (0, 0));
-        expect(doc.offsetToLineColumn(3), (1, 0));
-        expect(doc.offsetToLineColumn(5), (2, 0));
+        expect(doc.offsetToCodePosition(0), const CodePosition(0, 0));
+        expect(doc.offsetToCodePosition(3), const CodePosition(1, 0));
+        expect(doc.offsetToCodePosition(5), const CodePosition(2, 0));
       });
     });
   });

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inception/inception.dart';
+import 'package:inception/src/languages/dart/dart_lexer.dart';
 
 void main() {
   group('CodeDocument tokenization', () {
@@ -35,7 +36,6 @@ void main() {
 
       expect(doc.text, 'a+b');
       final after = doc.tokens;
-      print("Token: $after");
 
       // Ensure punctuation and word tokens are correct
       expect(after.length, 3);
@@ -112,6 +112,13 @@ void main() {
 
       expect(doc.tokens, isNotEmpty);
       expect(doc.length, equals(doc.text.length));
+    });
+
+    test('does not tokenize newlines', () {
+      doc.replaceRange(0, 0, 'var example = 42;\nvar sample = 99;');
+
+      expect(doc.tokens[7], const LexerToken(16, 17, SyntaxKind.punctuation));
+      expect(doc.tokens[8], const LexerToken(18, 21, SyntaxKind.keyword));
     });
   });
 }

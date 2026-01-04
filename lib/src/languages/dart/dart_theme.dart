@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:inception/src/document/syntax_highlighter.dart';
 
 /// A theme for Dart code syntax highlighting.
-class DartTheme {
+class DartTheme implements SyntaxTheme {
   DartTheme({
     required this.baseTextStyle,
     required this.keyword,

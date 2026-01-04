@@ -20,6 +20,7 @@ import 'package:super_text_layout/super_text_layout.dart';
 class CodeLines extends StatefulWidget {
   const CodeLines({
     super.key,
+    this.verticalScrollController,
     required this.codeLines,
     this.shadowCaretPosition,
     this.selection,
@@ -27,6 +28,8 @@ class CodeLines extends StatefulWidget {
     // this.perLineUnderlays = const [],
     required this.style,
   });
+
+  final ScrollController? verticalScrollController;
 
   /// All lines of source code, with syntax highlighting already applied.
   final List<TextSpan> codeLines;
@@ -46,7 +49,44 @@ class CodeLines extends StatefulWidget {
 }
 
 class CodeLinesState extends State<CodeLines> implements CodeLayout {
+  late ScrollController _verticalScrollController;
+
+  // We track the previous frame line keys so we know which lines disappeared
+  // since the last frame and can clear them from `_lineKeys`.
+  final _previousFrameLineKeys = <int, GlobalKey>{};
   final _lineKeys = <int, GlobalKey>{};
+
+  @override
+  void initState() {
+    super.initState();
+
+    _verticalScrollController = widget.verticalScrollController ?? ScrollController();
+  }
+
+  @override
+  void didUpdateWidget(CodeLines oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.verticalScrollController != oldWidget.verticalScrollController) {
+      if (oldWidget.verticalScrollController == null) {
+        _verticalScrollController.dispose();
+      }
+
+      _verticalScrollController = widget.verticalScrollController ?? ScrollController();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.verticalScrollController == null) {
+      _verticalScrollController.dispose();
+    }
+
+    super.dispose();
+  }
+
+  double? get codeLineHeight => _codeLineHeight;
+  double? _codeLineHeight;
 
   CodePosition? get caretPosition => widget.selection?.extent;
 
@@ -107,7 +147,7 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
     final lineAboveIndex = position.line - 1;
     final codeLine = _lineKeys[lineAboveIndex]!.asCodeLine;
     if (preferredXOffset != null) {
-      return codeLine.findCodePositionNearestLocalOffset(Offset(preferredXOffset, 0));
+      return codeLine.findCodePositionNearestLocalOffset(Offset(preferredXOffset, 0)).$1;
     } else {
       return CodePosition(
         lineAboveIndex,
@@ -125,7 +165,7 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
     final lineBelowIndex = position.line + 1;
     final codeLine = _lineKeys[lineBelowIndex]!.asCodeLine;
     if (preferredXOffset != null) {
-      return codeLine.findCodePositionNearestLocalOffset(Offset(preferredXOffset, 0));
+      return codeLine.findCodePositionNearestLocalOffset(Offset(preferredXOffset, 0)).$1;
     } else {
       return CodePosition(
         lineBelowIndex,
@@ -151,9 +191,21 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
   }
 
   @override
-  CodePosition findCodePositionNearestGlobalOffset(Offset globalOffset) {
+  (CodePosition, TextAffinity) findCodePositionNearestGlobalOffset(Offset globalOffset) {
     for (int lineIndex in _lineKeys.keys) {
-      final lineLayout = _lineKeys[lineIndex]!.asCodeLine;
+      final lineKey = _lineKeys[lineIndex];
+      assert(
+        lineKey != null,
+        "A key in the _lineKeys points to a null line (line $lineIndex). All map entries should point to GlobalKeys.",
+      );
+      if (lineKey!.currentState == null) {
+        // The line `GlobalKey` isn't bound to any `State`. This means that the line isn't visible so
+        // we ignore it. We have some behavior to try to throw away unused keys, and ideally this situation
+        // would never happen, but the lines are built at the discretion of our `TwoDimensionalScrollableDelegate`
+        // so we don't know when any specific line is thrown away.
+        continue;
+      }
+      final lineLayout = lineKey.asCodeLine;
       if (!lineLayout.containsGlobalYValue(globalOffset.dy)) {
         continue;
       }
@@ -161,11 +213,11 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
       return lineLayout.findCodePositionNearestGlobalOffset(globalOffset);
     }
 
-    return const CodePosition(0, 0);
+    return (const CodePosition(0, 0), TextAffinity.downstream);
   }
 
   @override
-  CodePosition findCodePositionNearestLocalOffset(Offset localOffset) {
+  (CodePosition, TextAffinity) findCodePositionNearestLocalOffset(Offset localOffset) {
     final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(localOffset);
     return findCodePositionNearestGlobalOffset(globalOffset);
   }
@@ -305,12 +357,20 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
+    _previousFrameLineKeys
+      ..clear()
+      ..addAll(_lineKeys);
+    _lineKeys.clear();
+
+    final codeLines = ColoredBox(
       color: widget.style.lineBackgroundColor,
       child: MouseRegion(
         cursor: SystemMouseCursors.text,
         child: widget.codeLines.isNotEmpty
             ? CodeScroller(
+                verticalDetails: ScrollableDetails.vertical(
+                  controller: _verticalScrollController,
+                ),
                 delegate: TwoDimensionalChildBuilderDelegate(
                   maxXIndex: 1,
                   maxYIndex: widget.codeLines.length - 1,
@@ -322,10 +382,17 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
                     return _buildCodeLine(vicinity.yIndex);
                   },
                 ),
+                onCodeLineHeightMeasured: (codeLineHeight) => _codeLineHeight = codeLineHeight,
               )
             : const SizedBox(),
       ),
     );
+
+    // We're done building lines and re-using existing keys. Throw away all the keys we
+    // no longer need.
+    _previousFrameLineKeys.clear();
+
+    return codeLines;
   }
 
   Widget _buildLineIndicator(int lineIndex) {
@@ -348,28 +415,60 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
   }
 
   Widget _buildCodeLine(int lineIndex) {
-    _lineKeys[lineIndex] ??= GlobalKey(debugLabel: "Code line: $lineIndex");
-    final key = _lineKeys[lineIndex];
+    final key = _previousFrameLineKeys[lineIndex] ?? GlobalKey(debugLabel: "Code line: $lineIndex");
+    _lineKeys[lineIndex] = key;
 
     return CodeLine(
       key: key,
       lineNumber: lineIndex,
       code: widget.codeLines[lineIndex],
+      selection: _calculateLineSelection(lineIndex),
+      hasStart: widget.selection?.start.line == lineIndex,
+      hasEnd: widget.selection?.end.line == lineIndex,
+      hasCaret: widget.selection?.extent.line == lineIndex,
+      shadowCaretPosition: widget.shadowCaretPosition?.line == lineIndex
+          ? TextPosition(offset: widget.shadowCaretPosition!.characterOffset)
+          : null,
       // TODO: Pipe style controls through to CodeLines widget
       style: CodeLineStyle(
         indentLineColor: widget.style.indentLineColor,
         baseTextStyle: widget.style.baseTextStyle,
         shadowCaretColor: Colors.grey.shade700,
         selectionBoxColor: Colors.blueGrey,
-        caretColor: Colors.blueAccent,
+        caretColor: Colors.yellowAccent,
       ),
-      shadowCaretPosition: widget.shadowCaretPosition?.line == lineIndex
-          ? TextPosition(offset: widget.shadowCaretPosition!.characterOffset)
-          : null,
-      // TODO: handle non-collapsed selections.
-      selection:
-          caretPosition?.line == lineIndex ? TextSelection.collapsed(offset: caretPosition!.characterOffset) : null,
     );
+  }
+
+  TextSelection? _calculateLineSelection(int lineIndex) {
+    final documentSelection = widget.selection;
+    if (documentSelection == null) {
+      return null;
+    }
+    if (documentSelection.start.line > lineIndex || documentSelection.end.line < lineIndex) {
+      // The selection doesn't include this line.
+      return null;
+    }
+
+    // print("Calculating selection for line $lineIndex");
+    // print(" - Doc selection start line: ${documentSelection.start.line}");
+    // print(" - Doc selection end line: ${documentSelection.end.line}");
+    final lineSelection = documentSelection.isDownstream
+        ? TextSelection(
+            baseOffset: documentSelection.start.line == lineIndex ? documentSelection.start.characterOffset : 0,
+            extentOffset: documentSelection.end.line == lineIndex
+                ? documentSelection.end.characterOffset
+                : widget.codeLines[lineIndex].toPlainText().length,
+          )
+        : TextSelection(
+            baseOffset: documentSelection.end.line == lineIndex
+                ? documentSelection.end.characterOffset
+                : widget.codeLines[lineIndex].toPlainText().length,
+            extentOffset: documentSelection.start.line == lineIndex ? documentSelection.start.characterOffset : 0,
+          );
+    // print(" - Line selection: $lineSelection");
+
+    return lineSelection;
   }
 }
 
@@ -473,10 +572,10 @@ abstract interface class CodeLayout {
   CodeRange? findWordBoundaryAtLocalOffset(Offset localOffset);
 
   /// Returns the [CodePosition] nearest to the given [globalOffset].
-  CodePosition findCodePositionNearestGlobalOffset(Offset globalOffset);
+  (CodePosition, TextAffinity) findCodePositionNearestGlobalOffset(Offset globalOffset);
 
   /// Returns the [CodePosition] nearest to the given [localOffset].
-  CodePosition findCodePositionNearestLocalOffset(Offset localOffset);
+  (CodePosition, TextAffinity) findCodePositionNearestLocalOffset(Offset localOffset);
 
   /// Returns the [Rect] that surrounds the character at the given [position].
   Rect getLocalRectForCodePosition(CodePosition position);
@@ -523,6 +622,9 @@ class CodeLine extends StatefulWidget {
     required this.code,
     this.shadowCaretPosition,
     this.selection,
+    this.hasStart = false,
+    this.hasEnd = false,
+    this.hasCaret = false,
     required this.style,
     // this.overlays = const [],
     // this.underlays = const [],
@@ -538,6 +640,10 @@ class CodeLine extends StatefulWidget {
   final TextPosition? shadowCaretPosition;
 
   final TextSelection? selection;
+
+  final bool hasStart;
+  final bool hasEnd;
+  final bool hasCaret;
 
   final CodeLineStyle style;
 
@@ -606,15 +712,37 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
   }
 
   @override
-  CodePosition findCodePositionNearestGlobalOffset(Offset globalOffset) {
+  (CodePosition, TextAffinity) findCodePositionNearestGlobalOffset(Offset globalOffset) {
     final localOffset = (_codeTextKey.currentContext!.findRenderObject() as RenderBox).globalToLocal(globalOffset);
     return findCodePositionNearestLocalOffset(localOffset);
   }
 
   @override
-  CodePosition findCodePositionNearestLocalOffset(Offset localOffset) {
+  (CodePosition, TextAffinity) findCodePositionNearestLocalOffset(Offset localOffset) {
     final textPosition = _textLayout.getPositionNearestToOffset(localOffset);
-    return CodePosition(widget.lineNumber, textPosition.offset);
+
+    // Figure out proximity -> affinity.
+    late final TextAffinity affinity;
+    final characterRect = _textLayout.getCharacterBox(textPosition)!.toRect();
+    if (localOffset.dy < characterRect.top) {
+      // The search offset is above the text. This is the "nearest" position because
+      // as a matter of policy, when searching above text, we report the beginning of
+      // the text as the nearest position.
+      affinity = TextAffinity.upstream;
+    } else if (localOffset.dy > characterRect.bottom) {
+      // The search offset is below the text. This is the "nearest" position because
+      // as a matter of policy, when searching below text, we report the end of the
+      // text as the nearest position.
+      affinity = TextAffinity.downstream;
+    } else {
+      // The search offset is vertically within the line of text. Report affinity
+      // based on whichever horizontal edge is closer.
+      affinity = (characterRect.left - localOffset.dx).abs() > (characterRect.right - localOffset.dx).abs()
+          ? TextAffinity.downstream
+          : TextAffinity.upstream;
+    }
+
+    return (CodePosition(widget.lineNumber, textPosition.offset), affinity);
   }
 
   @override
@@ -680,6 +808,11 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
 
   @override
   Widget build(BuildContext context) {
+    // if (widget.selection != null) {
+    //   print(
+    //       "Line ${widget.lineNumber} has selection: ${widget.selection}, has base: ${widget.hasStart}, has extent: ${widget.hasEnd}");
+    // }
+
     final caretPosition = widget.selection?.extent;
 
     // if (widget.shadowCaretPosition != null) {
@@ -693,11 +826,6 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
         content: (context) => Stack(
           children: [
             _buildVerticalTabLines(),
-            // Text.rich(
-            //   key: _codeTextKey,
-            //   widget.code,
-            //   style: widget.baseTextStyle,
-            // ),
             BorderBox(
               color: widget.debugPaint.textBoundaryColor,
               isEnabled: widget.debugPaint.textBoundaryColor != null,
@@ -712,21 +840,66 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
                     children: [widget.code],
                   ),
                   layerBeneathBuilder: (context, layout) {
+                    // final selectionBoxWidgets = <Widget>[];
+                    //
+                    // final lineSelection = widget.selection;
+                    // if (lineSelection != null) {
+                    //   final paintToStartOfLine = lineSelection.start == 0 && !widget.hasStart;
+                    //   final paintToEndOfLine = lineSelection.end == widget.code.toPlainText().length && !widget.hasEnd;
+                    //
+                    //   final selectionBoxLeft = paintToStartOfLine
+                    //       ? 0.0
+                    //       : layout
+                    //           .getOffsetForCaret(
+                    //             TextPosition(offset: lineSelection.start),
+                    //           )
+                    //           .dx;
+                    //   // print(" - selection offset left: $selectionBoxLeft");
+                    //   final selectionBoxRight = paintToEndOfLine
+                    //       ? 0.0
+                    //       : layout
+                    //               .getOffsetForCaret(
+                    //                 TextPosition(offset: widget.code.toPlainText().length),
+                    //               )
+                    //               .dx -
+                    //           layout
+                    //               .getOffsetForCaret(
+                    //                 TextPosition(offset: lineSelection.end),
+                    //               )
+                    //               .dx;
+                    //
+                    //   selectionBoxWidgets.addAll([
+                    //     // Give a slight highlight to the entire line that has the extent.
+                    //     // TODO: Make this color theme-configurable.
+                    //     Positioned(
+                    //       top: 0,
+                    //       bottom: 0,
+                    //       left: 0,
+                    //       right: 0,
+                    //       child: ColoredBox(color: Colors.yellow.withValues(alpha: 0.03)),
+                    //     ),
+                    //     // Paint the selection box.
+                    //     // TODO: Make this color theme-configurable.
+                    //     // FIXME: Figure out why left/right values are NaN for lines that scroll off
+                    //     //        screen. Check if we should fix something in super_text_layout.
+                    //     if (!selectionBoxLeft.isNaN && !selectionBoxRight.isNaN)
+                    //       Positioned(
+                    //         top: 0,
+                    //         bottom: 0,
+                    //         left: selectionBoxLeft,
+                    //         right: selectionBoxRight,
+                    //         child: const ColoredBox(color: Color(0xFF334400)),
+                    //       ),
+                    //   ]);
+                    // }
+
                     final shadowCaretPosition = widget.shadowCaretPosition;
 
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        if (widget.selection?.isCollapsed == false) //
-                          Positioned(
-                            left: layout.getOffsetForCaret(TextPosition(offset: widget.selection!.start)).dx,
-                            // TODO: Use a CustomPainter instead of a Positioned so that we don't need to do `rightSide - endXOffset`
-                            right: layout.getOffsetForCaret(TextPosition(offset: widget.code.toPlainText().length)).dx -
-                                layout.getOffsetForCaret(TextPosition(offset: widget.selection!.end)).dx,
-                            top: 0,
-                            bottom: 0,
-                            child: ColoredBox(color: widget.style.selectionBoxColor),
-                          ),
+                        // ...selectionBoxWidgets,
+                        // Shadow caret.
                         if (shadowCaretPosition != null) //
                           Positioned(
                             left: layout.getOffsetForCaret(shadowCaretPosition).dx,
@@ -744,7 +917,7 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        if (caretPosition != null) //
+                        if (widget.hasCaret && caretPosition != null) //
                           Positioned(
                             left: layout.getOffsetForCaret(caretPosition).dx,
                             // FIXME: The reported SuperTextLayout y-offset when caret is at the very end of the line
@@ -765,9 +938,8 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
             ),
           ],
         ),
-        // underlays: widget.underlays,
-        // overlays: widget.overlays,
         underlays: [
+          _buildSelectionBox,
           _buildShadowCaret,
         ],
       ),
@@ -814,6 +986,16 @@ class _CodeLineState extends State<CodeLine> implements CodeLineLayout {
     );
   }
 
+  ContentLayerWidget _buildSelectionBox(BuildContext context) {
+    return _LineSelectionBoxContentLayer(
+      codeTextKey: _codeTextKey,
+      codeText: widget.code,
+      lineSelection: widget.selection,
+      hasStart: widget.hasStart,
+      hasEnd: widget.hasEnd,
+    );
+  }
+
   ContentLayerWidget _buildShadowCaret(BuildContext context) {
     return _ShadowCaretContentLayer(widget.shadowCaretPosition);
   }
@@ -841,6 +1023,89 @@ class CodeLineDebugPaint {
   final Color? textBoundaryColor;
 }
 
+class _LineSelectionBoxContentLayer extends ContentLayerStatelessWidget {
+  const _LineSelectionBoxContentLayer({
+    required this.codeTextKey,
+    required this.codeText,
+    required this.lineSelection,
+    required this.hasStart,
+    required this.hasEnd,
+  });
+
+  final GlobalKey codeTextKey;
+  final TextSpan codeText;
+  final TextSelection? lineSelection;
+  final bool hasStart;
+  final bool hasEnd;
+
+  @override
+  Widget doBuild(BuildContext context, Element? contentElement, RenderObject? contentLayout) {
+    if (lineSelection == null) {
+      return const EmptyContentLayer();
+    }
+
+    final lineBox = contentLayout as RenderBox;
+    final textLayout = codeTextKey.currentState as ProseTextBlock;
+    // Note: Instead of getting the absolute global offset of the line and the text layout, and then calculating
+    //       the difference, we directly ask for the difference by passing the `lineBox` as an ancestor.
+    //       I did this specifically because `TwoDimensionScrollable` was breaking when trying to get absolute
+    //       global offsets. This happened when selecting some code, scrolling it offscreen, then scrolling it back
+    //       on screen. The child in the `TwoDimensionScrollable` didn't have its transform matrix set and therefore
+    //       was blowing up.
+    final textBoundaryOffset =
+        (codeTextKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(Offset.zero, ancestor: lineBox);
+
+    final paintToStartOfLine = lineSelection!.start == 0 && !hasStart;
+    final paintToEndOfLine = lineSelection!.end == codeText.toPlainText().length && !hasEnd;
+
+    final selectionBoxLeft = paintToStartOfLine
+        ? 0.0
+        : textBoundaryOffset.dx +
+            textLayout.textLayout
+                .getOffsetForCaret(
+                  TextPosition(offset: lineSelection!.start),
+                )
+                .dx;
+    final selectionBoxRight = paintToEndOfLine
+        ? 0.0
+        : lineBox.size.width -
+            textLayout.textLayout
+                .getOffsetForCaret(
+                  TextPosition(offset: lineSelection!.end),
+                )
+                .dx -
+            textBoundaryOffset.dx;
+
+    return ContentLayerProxyWidget(
+      child: Stack(
+        children: [
+          // Give a slight highlight to the entire line that has the extent.
+          // TODO: Make this color theme-configurable.
+          Positioned(
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: ColoredBox(color: Colors.yellow.withValues(alpha: 0.03)),
+          ),
+          // Paint the selection box.
+          // TODO: Make this color theme-configurable.
+          // FIXME: Figure out why left/right values are NaN for lines that scroll off
+          //        screen. Check if we should fix something in super_text_layout.
+          if (!selectionBoxLeft.isNaN && !selectionBoxRight.isNaN)
+            Positioned(
+              top: 0,
+              bottom: 0,
+              left: selectionBoxLeft,
+              right: selectionBoxRight,
+              child: const ColoredBox(color: Color(0xFF334400)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ShadowCaretContentLayer extends ContentLayerStatelessWidget {
   const _ShadowCaretContentLayer(this.shadowCaretOffset);
 
@@ -848,9 +1113,9 @@ class _ShadowCaretContentLayer extends ContentLayerStatelessWidget {
 
   @override
   Widget doBuild(BuildContext context, Element? contentElement, RenderObject? contentLayout) {
-    if (shadowCaretOffset != null) {
-      print("Line element: ${contentElement.runtimeType}, render object: ${contentLayout.runtimeType}");
-    }
+    // if (shadowCaretOffset != null) {
+    //   print("Line element: ${contentElement.runtimeType}, render object: ${contentLayout.runtimeType}");
+    // }
 
     return const EmptyContentLayer();
   }
@@ -891,7 +1156,10 @@ class CodeScroller extends TwoDimensionalScrollView {
     super.dragStartBehavior = DragStartBehavior.start,
     super.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
     super.clipBehavior = Clip.hardEdge,
+    this.onCodeLineHeightMeasured,
   }) : super(delegate: delegate);
+
+  final void Function(double codeLineHeight)? onCodeLineHeightMeasured;
 
   @override
   Widget buildViewport(
@@ -908,6 +1176,7 @@ class CodeScroller extends TwoDimensionalScrollView {
       delegate: delegate as TwoDimensionalChildBuilderDelegate,
       cacheExtent: cacheExtent,
       clipBehavior: clipBehavior,
+      onCodeLineHeightMeasured: onCodeLineHeightMeasured,
     );
   }
 }
@@ -923,7 +1192,10 @@ class CodeScrollerViewport extends TwoDimensionalViewport {
     required super.mainAxis,
     super.cacheExtent,
     super.clipBehavior = Clip.hardEdge,
+    this.onCodeLineHeightMeasured,
   });
+
+  final void Function(double codeLineHeight)? onCodeLineHeightMeasured;
 
   @override
   RenderTwoDimensionalViewport createRenderObject(BuildContext context) {
@@ -937,6 +1209,7 @@ class CodeScrollerViewport extends TwoDimensionalViewport {
       childManager: context as TwoDimensionalChildManager,
       cacheExtent: cacheExtent,
       clipBehavior: clipBehavior,
+      onCodeLineHeightMeasured: onCodeLineHeightMeasured,
     );
   }
 
@@ -968,12 +1241,15 @@ class RenderCodeScrollerViewport extends RenderTwoDimensionalViewport {
     required super.childManager,
     super.cacheExtent,
     super.clipBehavior = Clip.hardEdge,
+    this.onCodeLineHeightMeasured,
   }) : super(delegate: delegate);
 
   final LayerHandle<ClipRectLayer> _clipRectLayer = LayerHandle<ClipRectLayer>();
 
   late ChildVicinity _leadingVicinity;
   late ChildVicinity _trailingVicinity;
+
+  final void Function(double codeLineHeight)? onCodeLineHeightMeasured;
 
   @override
   void dispose() {
@@ -1005,9 +1281,17 @@ class RenderCodeScrollerViewport extends RenderTwoDimensionalViewport {
     // The line height is computed when the first line is laid out.
     double lineHeight = 0;
 
+    const firstLineVicinity = ChildVicinity(xIndex: 1, yIndex: 0);
+    childrenCache[firstLineVicinity] = buildOrObtainChildFor(firstLineVicinity)!;
+    childrenCache[firstLineVicinity]!.layout(BoxConstraints(), parentUsesSize: true);
+    lineHeight = childrenCache[firstLineVicinity]!.size.height;
+    onCodeLineHeightMeasured?.call(lineHeight);
+    final firstCachedLineIndex = max(verticalPixels - cacheExtent, 0) ~/ lineHeight;
+    final lastCachedLineIndex = min(((verticalPixels + viewportHeight + cacheExtent) / lineHeight).ceil(), maxRowIndex);
+
     double maxLineIndicatorWidth = 0;
-    double maxLineWidth = 0;
-    for (int i = 0; i <= maxRowIndex; i++) {
+
+    for (int i = firstCachedLineIndex; i <= lastCachedLineIndex; i++) {
       // Compute the maximum width of the line indicator.
       // We will layout all of them after with the same width.
       final lineIndicatorVicinity = ChildVicinity(xIndex: 0, yIndex: i);
@@ -1024,10 +1308,20 @@ class RenderCodeScrollerViewport extends RenderTwoDimensionalViewport {
       // We are required to set the layoutOffset for each obtained child,
       // even if we won't paint it. Otherwise, an assertion error is thrown.
       parentDataOf(lineIndicator).layoutOffset = const Offset(double.infinity, double.infinity);
+    }
 
+    // Make every line at least as wide as the viewport, so that selection boxes can always
+    // extend as wide as the visible area.
+    // print("Selecting max line width.");
+    // print(" - constraints max width: ${constraints.maxWidth}");
+    // print(" - viewport width: ${viewportDimension.width}");
+    // print(" - max line indicator width: $maxLineIndicatorWidth");
+    var maxLineWidth = viewportDimension.width - maxLineIndicatorWidth;
+
+    for (int i = firstCachedLineIndex; i <= lastCachedLineIndex; i++) {
       // Layout the code line.
       final codeLineVicinity = ChildVicinity(xIndex: 1, yIndex: i);
-      final codeLine = buildOrObtainChildFor(codeLineVicinity)!;
+      final codeLine = childrenCache[codeLineVicinity] ?? buildOrObtainChildFor(codeLineVicinity)!;
       childrenCache[codeLineVicinity] = codeLine;
 
       codeLine.layout(
@@ -1047,8 +1341,19 @@ class RenderCodeScrollerViewport extends RenderTwoDimensionalViewport {
       parentDataOf(codeLine).layoutOffset = const Offset(double.infinity, double.infinity);
     }
 
+    // Re-layout each line at the length of the longest line.
+    for (int i = firstCachedLineIndex; i <= lastCachedLineIndex; i++) {
+      final codeLineVicinity = ChildVicinity(xIndex: 1, yIndex: i);
+      final codeLine = childrenCache[codeLineVicinity]!;
+
+      codeLine.layout(
+        constraints.loosen().copyWith(minWidth: maxLineWidth, maxWidth: maxLineWidth),
+        parentUsesSize: true,
+      );
+    }
+
     // Now that we have maximum indicator width, layout each indicator with the same width.
-    for (int i = 0; i <= maxRowIndex; i++) {
+    for (int i = firstCachedLineIndex; i <= lastCachedLineIndex; i++) {
       final lineIndicatorVicinity = ChildVicinity(xIndex: 0, yIndex: i);
       final lineIndicator = childrenCache[lineIndicatorVicinity]!;
       lineIndicator.layout(
@@ -1095,7 +1400,9 @@ class RenderCodeScrollerViewport extends RenderTwoDimensionalViewport {
       clampDouble(verticalExtent - viewportDimension.height, 0.0, double.infinity),
     );
 
-    final horizontalExtent = maxLineWidth + maxLineIndicatorWidth;
+    final horizontalExtent = maxLineWidth! + maxLineIndicatorWidth;
+    // print(
+    //     "Horizontal extent: $horizontalExtent, max indicator width: $maxLineIndicatorWidth, max line width: $maxLineWidth");
     horizontalOffset.applyContentDimensions(
       0.0,
       clampDouble(horizontalExtent - viewportDimension.width, 0.0, double.infinity),
@@ -1172,10 +1479,10 @@ abstract interface class CodeLineLayout {
   CodeRange? findWordBoundaryAtLocalOffset(Offset localOffset);
 
   /// Returns the [CodePosition] nearest to the given [globalOffset].
-  CodePosition findCodePositionNearestGlobalOffset(Offset globalOffset);
+  (CodePosition, TextAffinity) findCodePositionNearestGlobalOffset(Offset globalOffset);
 
   /// Returns the [CodePosition] nearest to the given [localOffset].
-  CodePosition findCodePositionNearestLocalOffset(Offset localOffset);
+  (CodePosition, TextAffinity) findCodePositionNearestLocalOffset(Offset localOffset);
 
   /// Returns the [Rect] that surrounds the character at the given [characterOffset].
   Rect getLocalRectForCharacter(int characterOffset);

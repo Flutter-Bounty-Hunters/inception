@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:inception/inception.dart';
 import 'package:inception/src/document/lexing.dart';
 import 'package:inception/src/document/piece_table.dart';
 
@@ -22,12 +23,36 @@ class CodeDocument {
   String get text => _pieceTable.getText();
   int get length => _pieceTable.length;
 
+  /// Extracts and returns a list of substrings for every line in the document.
+  List<String> computeLines() {
+    final lines = <String>[];
+    for (int i = 0; i < lineCount; i += 1) {
+      lines.add(getLine(i)!);
+    }
+    return lines;
+  }
+
   String? getLine(int lineIndex) {
     if (lineIndex < 0 || lineIndex >= lineCount) {
       return null;
     }
 
     return text.substring(getLineStart(lineIndex), getLineEnd(lineIndex));
+  }
+
+  /// Returns `true` if the given [position] points to a location in this document
+  /// that exists, or `false` otherwise.
+  ///
+  /// A [position] can be invalid in one of four ways:
+  ///  1. Points to a negative line index.
+  ///  2. Points to a line beyond the end of this document.
+  ///  3. Points to a negative character offset.
+  ///  4. Points to a character offset beyond the end of the line.
+  bool containsPosition(CodePosition position) {
+    return position.line >= 0 &&
+        position.line < lineCount &&
+        position.characterOffset >= 0 &&
+        position.characterOffset <= getLine(position.line)!.length;
   }
 
   // ----- START TOKENS --------
@@ -55,6 +80,80 @@ class CodeDocument {
     for (final listener in _tokenChangeListeners) {
       listener.onTokensChanged(start, end, newTokens);
     }
+  }
+
+  LexerToken? findTokenAt(CodePosition position) {
+    final textOffset = lineColumnToOffset(position.line, position.characterOffset);
+    final tokens = _tokens.where((t) => textOffset == t.start || (t.start < textOffset && textOffset < t.end));
+
+    if (tokens.length > 1) {
+      throw Exception(
+        "Something went wrong when finding the token at $position - we expect to find either 0 or 1, but we found ${tokens.length}",
+      );
+    }
+    if (tokens.isEmpty) {
+      return null;
+    }
+
+    return tokens.first;
+  }
+
+  LexerToken? findTokenToTheLeftOnSameLine(
+    CodePosition from, {
+    TokenFilter? filter,
+  }) {
+    if (!containsPosition(from)) {
+      return null;
+    }
+
+    // FIXME: This logic probably needs to use a character iterator, rather than
+    // an index integer. Look into it and make the switch if necessary.
+    var tokenAtStartingPoint = findTokenAt(from);
+    var textIndex = lineColumnToOffset(from.line, from.characterOffset) - 1;
+    while (textIndex >= 0 && offsetToCodePosition(textIndex).line == from.line) {
+      final nextPosition = offsetToCodePosition(textIndex);
+      final nextToken = findTokenAt(nextPosition);
+      if (nextToken != tokenAtStartingPoint &&
+          nextToken != null &&
+          (filter == null || filter(nextToken, nextPosition))) {
+        // This is the nearest token to the left, that we're looking for.
+        return nextToken;
+      }
+
+      // Move one character to the left.
+      textIndex -= 1;
+    }
+
+    return null;
+  }
+
+  LexerToken? findTokenToTheRightOnSameLine(
+    CodePosition from, {
+    TokenFilter? filter,
+  }) {
+    if (!containsPosition(from)) {
+      return null;
+    }
+
+    // FIXME: This logic probably needs to use a character iterator, rather than
+    // an index integer. Look into it and make the switch if necessary.
+    var tokenAtStartingPoint = findTokenAt(from);
+    var textIndex = lineColumnToOffset(from.line, from.characterOffset) + 1;
+    while (textIndex < length && offsetToCodePosition(textIndex).line == from.line) {
+      final nextPosition = offsetToCodePosition(textIndex);
+      final nextToken = findTokenAt(nextPosition);
+      if (nextToken != tokenAtStartingPoint &&
+          nextToken != null &&
+          (filter == null || filter(nextToken, nextPosition))) {
+        // This is the nearest token to the left, that we're looking for.
+        return nextToken;
+      }
+
+      // Move one character to the right.
+      textIndex += 1;
+    }
+
+    return null;
   }
 
   /// Returns all tokens that overlap the current selection or cursor position.
@@ -368,16 +467,16 @@ class CodeDocument {
       return null;
     }
 
-    final startLine = offsetToLineColumn(selectionStart).$1;
+    final startLine = offsetToCodePosition(selectionStart).line;
     final startOffset = getLineStart(startLine);
     final endOffset = startLine + 1 < lineCount ? getLineStart(startLine + 1) : length;
 
     return (start: startOffset, end: endOffset);
   }
 
-  (int line, int column) offsetToLineColumn(int offset) {
+  CodePosition offsetToCodePosition(int offset) {
     final lineIndex = _findLineIndex(offset);
-    return (lineIndex, offset - _lineStarts[lineIndex]);
+    return CodePosition(lineIndex, offset - _lineStarts[lineIndex]);
   }
 
   int lineColumnToOffset(int line, int column) => _lineStarts[line] + column;
@@ -667,6 +766,8 @@ class CodeDocument {
         code == 0x5F; // _
   }
 }
+
+typedef TokenFilter = bool Function(LexerToken token, CodePosition position);
 
 class _InsertAction implements _EditAction {
   _InsertAction(this.offset, this.text);
