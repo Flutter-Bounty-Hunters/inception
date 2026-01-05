@@ -31,6 +31,9 @@ class TestCodeEditorPresenter implements CodeEditorPresenter {
   int get lineCount => codeLines.value.length;
 
   @override
+  String getLine(int lineIndex) => codeLines.value[lineIndex].toPlainText();
+
+  @override
   int getLineLength(int lineIndex) => codeLines.value[lineIndex].toPlainText().length;
 
   @override
@@ -75,4 +78,24 @@ class TestCodeEditorPresenter implements CodeEditorPresenter {
     CodePosition searchStart, {
     bool expand = false,
   }) {}
+
+  @override
+  void insertText(String text) {
+    // TODO: implement insertText
+  }
+
+  @override
+  void insertNewline() {
+    // TODO: implement insertNewline
+  }
+
+  @override
+  void backspace() {
+    // TODO: implement backspace
+  }
+
+  @override
+  void delete() {
+    // TODO: implement delete
+  }
 }

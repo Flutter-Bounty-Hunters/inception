@@ -7,7 +7,8 @@ import 'package:inception/inception.dart';
 import 'package:inception/src/document/selection.dart';
 import 'package:inception/src/editor/code_layout.dart';
 import 'package:inception/src/editor/theme.dart';
-import 'package:super_editor/super_editor.dart' show TapSequenceGestureRecognizer;
+import 'package:inception/src/logging.dart';
+import 'package:super_editor/super_editor.dart' show TapSequenceGestureRecognizer, ImeInputOwner;
 
 class CodeEditor extends StatefulWidget {
   const CodeEditor({
@@ -27,7 +28,7 @@ class CodeEditor extends StatefulWidget {
   State<CodeEditor> createState() => _CodeEditorState();
 }
 
-class _CodeEditorState extends State<CodeEditor> {
+class _CodeEditorState extends State<CodeEditor> implements DeltaTextInputClient, ImeInputOwner {
   late FocusNode _focusNode;
 
   final _codeLayoutKey = GlobalKey(debugLabel: 'code-layout');
@@ -39,11 +40,16 @@ class _CodeEditorState extends State<CodeEditor> {
 
   double? _scrollAnimationTargetOffset;
 
+  TextInputConnection? _imeConnection;
+
   @override
   void initState() {
     super.initState();
 
     _focusNode = widget.focusNode ?? FocusNode(debugLabel: 'code-editor');
+    _focusNode.addListener(_onFocusChange);
+
+    widget.presenter.selection.addListener(_onSelectionChange);
   }
 
   @override
@@ -51,12 +57,22 @@ class _CodeEditorState extends State<CodeEditor> {
     super.didUpdateWidget(oldWidget);
 
     if (widget.focusNode != oldWidget.focusNode) {
+      _focusNode.removeListener(_onFocusChange);
+
       _focusNode = widget.focusNode ?? FocusNode(debugLabel: 'code-editor');
+    }
+
+    if (widget.presenter != oldWidget.presenter) {
+      oldWidget.presenter.selection.removeListener(_onSelectionChange);
+      widget.presenter.selection.addListener(_onSelectionChange);
     }
   }
 
   @override
   void dispose() {
+    widget.presenter.selection.removeListener(_onSelectionChange);
+
+    _focusNode.removeListener(_onFocusChange);
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
@@ -66,9 +82,38 @@ class _CodeEditorState extends State<CodeEditor> {
     super.dispose();
   }
 
+  void _onFocusChange() {
+    if (_focusNode.hasPrimaryFocus) {
+      // Gained focus. Open an IME connection.
+      InceptionLog.input.info("Opening IME connection because we gained focus");
+      _imeConnection = TextInput.attach(
+        this,
+        const TextInputConfiguration(
+          enableDeltaModel: true,
+          inputType: TextInputType.multiline,
+          inputAction: TextInputAction.newline,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableInteractiveSelection: false,
+          enableIMEPersonalizedLearning: false,
+        ),
+      )..show();
+      InceptionLog.input.fine("Is new IME connection attached? ${_imeConnection?.attached}");
+    } else {
+      // Lost focus. Close the IME connection.
+      InceptionLog.input.info("Closing IME connection because we lost focus");
+      _imeConnection?.close();
+    }
+  }
+
+  void _onSelectionChange() {
+    _syncCurrentEditingValueWithCodeDocument();
+  }
+
   void _onClickDown(TapDownDetails details) {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
+    InceptionLog.gestures.info("Click down at $codeTapPosition");
 
     widget.presenter.onClickDownAt(codeTapPosition, affinity, expand: HardwareKeyboard.instance.isShiftPressed);
 
@@ -84,6 +129,7 @@ class _CodeEditorState extends State<CodeEditor> {
   void _onDoubleClickDown(TapDownDetails details) {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
+    InceptionLog.gestures.info("Double-click down at $codeTapPosition");
 
     widget.presenter.onDoubleClickDownAt(codeTapPosition, affinity);
   }
@@ -91,6 +137,7 @@ class _CodeEditorState extends State<CodeEditor> {
   void _onTripleClickDown(TapDownDetails details) {
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final (codeTapPosition, affinity) = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition);
+    InceptionLog.gestures.info("Triple-click down at $codeTapPosition");
 
     widget.presenter.onTripleClickDownAt(codeTapPosition, affinity);
   }
@@ -99,6 +146,7 @@ class _CodeEditorState extends State<CodeEditor> {
   CodeSelection? _dragStartSelection;
 
   void _onPanStart(DragStartDetails details) {
+    InceptionLog.gestures.info("Pan start at global offset ${details.globalPosition}");
     if (_dragStartPosition == null) {
       // Ideally, the drag start position is set on tap down, but it seems that in some situations
       // a pan will start without first running a tap down call. We handle that here.
@@ -118,6 +166,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
+    InceptionLog.gestures.fine("Pan update at global offset ${details.globalPosition}");
     final codeLayout = _codeLayoutKey.currentState as CodeLayout;
     final newExtent = codeLayout.findCodePositionNearestGlobalOffset(details.globalPosition).$1;
 
@@ -149,11 +198,13 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _onPanEnd(DragEndDetails details) {
+    InceptionLog.gestures.info("Pan end at global offset ${details.globalPosition}");
     _dragStartPosition = null;
     _dragStartSelection = null;
   }
 
   void _onPanCancel() {
+    InceptionLog.gestures.info("Pan cancel");
     _dragStartPosition = null;
     _dragStartSelection = null;
   }
@@ -165,7 +216,29 @@ class _CodeEditorState extends State<CodeEditor> {
     }
 
     switch (keyEvent.logicalKey) {
+      // TODO: Toggle comments on CMD + "/"
+      case LogicalKeyboardKey.backspace:
+        InceptionLog.input.info("Backspace pressed");
+        final selection = widget.presenter.selection.value;
+        if (selection == null) {
+          return KeyEventResult.ignored;
+        }
+
+        widget.presenter.backspace();
+
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.delete:
+        InceptionLog.input.info("Delete pressed");
+        final selection = widget.presenter.selection.value;
+        if (selection == null) {
+          return KeyEventResult.ignored;
+        }
+
+        widget.presenter.delete();
+
+        return KeyEventResult.handled;
       case LogicalKeyboardKey.escape:
+        InceptionLog.input.info("Escape pressed");
         if (widget.presenter.selection.value?.isExpanded == true) {
           widget.presenter.selection.value = CodeSelection.collapsed(widget.presenter.selection.value!.extent);
           return KeyEventResult.handled;
@@ -174,6 +247,7 @@ class _CodeEditorState extends State<CodeEditor> {
         return KeyEventResult.ignored;
       case LogicalKeyboardKey.keyA:
         if (HardwareKeyboard.instance.isMetaPressed) {
+          InceptionLog.input.info("CDM+A pressed");
           widget.presenter.selection.value = CodeSelection(
             base: CodePosition.start,
             // FIXME: Pipe the CodeDocument through instead of using text spans for length
@@ -187,6 +261,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
         return KeyEventResult.ignored;
       case LogicalKeyboardKey.pageUp:
+        InceptionLog.input.info("Page Up pressed");
         final scrollPosition = _verticalScrollController.position;
         final scrollAnimationTargetOffset =
             max((_scrollAnimationTargetOffset ?? scrollPosition.pixels) - scrollPosition.viewportDimension, 0.0);
@@ -241,6 +316,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
         return KeyEventResult.handled;
       case LogicalKeyboardKey.pageDown:
+        InceptionLog.input.info("Page Down pressed");
         final scrollPosition = _verticalScrollController.position;
         final scrollAnimationTargetOffset = min(
           (_scrollAnimationTargetOffset ?? scrollPosition.pixels) + scrollPosition.viewportDimension,
@@ -297,6 +373,9 @@ class _CodeEditorState extends State<CodeEditor> {
 
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowLeft:
+        InceptionLog.input.info(
+          "Left Arrow pressed (shift: ${HardwareKeyboard.instance.isShiftPressed}, meta: ${HardwareKeyboard.instance.isMetaPressed})",
+        );
         final selection = widget.presenter.selection.value;
         if (selection == null) {
           return KeyEventResult.ignored;
@@ -318,6 +397,9 @@ class _CodeEditorState extends State<CodeEditor> {
 
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowRight:
+        InceptionLog.input.info(
+          "Right Arrow pressed (shift: ${HardwareKeyboard.instance.isShiftPressed}, meta: ${HardwareKeyboard.instance.isMetaPressed})",
+        );
         final selection = widget.presenter.selection.value;
         if (selection == null) {
           return KeyEventResult.ignored;
@@ -339,6 +421,9 @@ class _CodeEditorState extends State<CodeEditor> {
 
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowUp:
+        InceptionLog.input.info(
+          "Up Arrow pressed (shift: ${HardwareKeyboard.instance.isShiftPressed})",
+        );
         final selection = widget.presenter.selection.value;
         if (selection == null) {
           return KeyEventResult.ignored;
@@ -358,6 +443,9 @@ class _CodeEditorState extends State<CodeEditor> {
 
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowDown:
+        InceptionLog.input.info(
+          "Down Arrow pressed (shift: ${HardwareKeyboard.instance.isShiftPressed}, meta: ${HardwareKeyboard.instance.isMetaPressed})",
+        );
         final selection = widget.presenter.selection.value;
         if (selection == null) {
           return KeyEventResult.ignored;
@@ -457,13 +545,15 @@ class _CodeEditorState extends State<CodeEditor> {
       _SelectionDirection.left => _codeLayout.findPositionBefore(selection.extent),
       _SelectionDirection.right => _codeLayout.findPositionAfter(selection.extent),
       _SelectionDirection.up => _codeLayout.findPositionInLineAbove(
-          selection.extent,
-          preferredXOffset: _preferredCaretXOffset,
-        ),
+            selection.extent,
+            preferredXOffset: _preferredCaretXOffset,
+          ) ??
+          CodePosition.start,
       _SelectionDirection.down => _codeLayout.findPositionInLineBelow(
-          selection.extent,
-          preferredXOffset: _preferredCaretXOffset,
-        ),
+            selection.extent,
+            preferredXOffset: _preferredCaretXOffset,
+          ) ??
+          _codeLayout.findEndPosition(),
     };
 
     if (newPosition != null) {
@@ -606,6 +696,140 @@ class _CodeEditorState extends State<CodeEditor> {
     _preferredCaretXOffset = _codeLayout.getXForCaretInCodeLine(selection.extent);
   }
 
+  //------- START IME CLIENT ----------
+  @override
+  AutofillScope? get currentAutofillScope => null;
+
+  @override
+  TextEditingValue? get currentTextEditingValue => _currentTextEditingValue;
+  TextEditingValue? _currentTextEditingValue;
+
+  @override
+  void updateEditingValueWithDeltas(List<TextEditingDelta> textEditingDeltas) {
+    InceptionLog.input.fine("Received ${textEditingDeltas.length} delta(s) from IME");
+    for (final delta in textEditingDeltas) {
+      if (delta is TextEditingDeltaInsertion) {
+        InceptionLog.input.info("Insertion delta, text: '${delta.textInserted}'");
+        widget.presenter.insertText(delta.textInserted);
+      } else if (delta is TextEditingDeltaReplacement) {
+        InceptionLog.input.info("Replacement delta, was: '${delta.textReplaced}', now: '${delta.replacementText}'");
+        if (delta.textReplaced == " " && delta.replacementText == ". ") {
+          // The OS intercepted the insertion of a space and tried to replace it with
+          // the end of a sentence. This is a common IME re-write when the user is composing
+          // a traditional text message, but we don't want this in a code editor. I tried disabling
+          // everything I could in the `TextInputConfiguration`, but I couldn't stop this
+          // from happening on Mac. So we explicitly intercept and insert a space, ourselves.
+          InceptionLog.input.info("Reverting IME interception. Manually inserting a space.");
+          widget.presenter.insertText(" ");
+        }
+      } else if (delta is TextEditingDeltaDeletion) {
+        InceptionLog.input.info("Deletion delta, deleted '${delta.textDeleted}' in range ${delta.deletedRange}");
+      } else if (delta is TextEditingDeltaNonTextUpdate) {
+        InceptionLog.input.info("Non-text delta, selection: ${delta.selection}, composing: ${delta.composing}");
+      }
+    }
+
+    _syncCurrentEditingValueWithCodeDocument();
+  }
+
+  @override
+  void updateEditingValue(TextEditingValue value) {
+    // No-op, because we use editing deltas.
+  }
+
+  @override
+  void performSelector(String selectorName) {
+    InceptionLog.input.info("Performing selector: '$selectorName'");
+    switch (selectorName) {
+      case "insertNewline:":
+        widget.presenter.insertNewline();
+      default:
+      // No-op.
+    }
+  }
+
+  @override
+  void performAction(TextInputAction action) {
+    // No-op. These are for mobile keyboards. We receive newlines as "\n" characters in
+    // insertion deltas.
+
+    // InceptionLog.input.info("Performing action: '$action'");
+    // switch (action) {
+    //   case TextInputAction.newline:
+    //     widget.presenter.insertNewline();
+    //   default:
+    //   // No-op
+    // }
+  }
+
+  void _syncCurrentEditingValueWithCodeDocument() {
+    final selection = widget.presenter.selection.value;
+    if (selection != null) {
+      if (selection.isCollapsed) {
+        _currentTextEditingValue = TextEditingValue(
+          text: widget.presenter.getLine(selection.extent.line),
+          selection: TextSelection.collapsed(offset: selection.extent.characterOffset),
+        );
+      } else {
+        // TODO: expanded selection.
+        _currentTextEditingValue = null;
+      }
+    } else {
+      _currentTextEditingValue = null;
+    }
+  }
+
+  @override
+  void updateFloatingCursor(RawFloatingCursorPoint point) {
+    // No-op. This is just for iOS.
+  }
+
+  @override
+  void showToolbar() {
+    // TODO: implement showToolbar
+  }
+
+  @override
+  void showAutocorrectionPromptRect(int start, int end) {
+    // TODO: implement showAutocorrectionPromptRect
+  }
+
+  @override
+  void didChangeInputControl(TextInputControl? oldControl, TextInputControl? newControl) {
+    // No-op. Not sure what this is for.
+  }
+
+  @override
+  void insertContent(KeyboardInsertedContent content) {
+    // No-op.
+  }
+
+  @override
+  void insertTextPlaceholder(Size size) {
+    // No-op.
+  }
+
+  @override
+  void removeTextPlaceholder() {
+    // No-op.
+  }
+
+  @override
+  void performPrivateCommand(String action, Map<String, dynamic> data) {
+    // No-op.
+  }
+
+  @override
+  void connectionClosed() {
+    InceptionLog.input.info("IME connection closed");
+    _imeConnection = null;
+  }
+
+  // For access in tests.
+  @override
+  DeltaTextInputClient get imeClient => this;
+  //------- END IME CLIENT ------------
+
   CodeLinesState get _codeLayout => _codeLayoutKey.currentState as CodeLinesState;
 
   @override
@@ -665,10 +889,13 @@ abstract class CodeEditorPresenter {
 
   void dispose();
 
+  @visibleForTesting
   @protected
   final CodeDocument document;
 
   int get lineCount => document.lineCount;
+
+  String getLine(int lineIndex) => document.getLine(lineIndex)!;
 
   int getLineLength(int lineIndex) => document.getLine(lineIndex)!.length;
 
@@ -892,6 +1119,135 @@ abstract class CodeEditorPresenter {
       );
       return;
     }
+  }
+
+  void insertText(String text) {
+    var currentSelection = selection.value;
+    if (currentSelection == null) {
+      // Can't insert text without a caret.
+      return;
+    }
+
+    if (currentSelection.isExpanded) {
+      _deleteExpandedSelection(currentSelection);
+      currentSelection = selection.value!;
+    }
+
+    // Insert the new text.
+    final documentOffset = document.lineColumnToOffset(
+      currentSelection.extent.line,
+      currentSelection.extent.characterOffset,
+    );
+    document.insert(documentOffset, text);
+
+    // Move the caret by first moving forward in the code document text blob, which allows
+    // us to treat newlines the same as regular characters. Then, map that offset to a new
+    // `CodePosition`.
+    final newDocumentOffset = documentOffset + text.length;
+    final newExtent = document.offsetToCodePosition(newDocumentOffset);
+
+    // Push the caret forward.
+    selection.value = CodeSelection.collapsed(newExtent);
+  }
+
+  void insertNewline() {
+    var currentSelection = selection.value;
+    if (currentSelection == null) {
+      // Can't insert text without a caret.
+      return;
+    }
+
+    if (currentSelection.isExpanded) {
+      _deleteExpandedSelection(currentSelection);
+      currentSelection = selection.value!;
+    }
+
+    // Insert newline.
+    final documentOffset = document.lineColumnToOffset(
+      currentSelection.extent.line,
+      currentSelection.extent.characterOffset,
+    );
+    document.insert(documentOffset, "\n");
+
+    // Move caret to next line.
+    selection.value = CodeSelection.collapsed(
+      CodePosition(currentSelection.extent.line + 1, 0),
+    );
+  }
+
+  void backspace() {
+    final currentSelection = selection.value;
+    if (currentSelection == null) {
+      return;
+    }
+
+    if (currentSelection.isExpanded) {
+      _deleteExpandedSelection(currentSelection);
+    } else {
+      final documentCaretOffset = document.lineColumnToOffset(
+        currentSelection.end.line,
+        currentSelection.end.characterOffset,
+      );
+      if (documentCaretOffset == 0) {
+        // We're at the beginning of the document. Nothing to backspace.
+        return;
+      }
+
+      document.delete(offset: documentCaretOffset - 1, count: 1);
+
+      if (currentSelection.extent.characterOffset > 0) {
+        selection.value = CodeSelection.collapsed(
+          CodePosition(currentSelection.extent.line, currentSelection.extent.characterOffset - 1),
+        );
+      } else {
+        // We're at the start of a line, so we need to move up a line.
+        final lineAboveIndex = currentSelection.extent.line - 1;
+        final lineAboveLength = document.getLine(lineAboveIndex)!.length;
+        selection.value = CodeSelection.collapsed(
+          CodePosition(lineAboveIndex, lineAboveLength),
+        );
+      }
+    }
+  }
+
+  void delete() {
+    final currentSelection = selection.value;
+    if (currentSelection == null) {
+      return;
+    }
+
+    if (currentSelection.isExpanded) {
+      _deleteExpandedSelection(currentSelection);
+    } else {
+      final documentCaretOffset = document.lineColumnToOffset(
+        currentSelection.end.line,
+        currentSelection.end.characterOffset,
+      );
+      if (documentCaretOffset == document.length) {
+        // We're at the end of the document. Nothing to backspace.
+        return;
+      }
+
+      document.delete(offset: documentCaretOffset, count: 1);
+      // Note: Caret doesn't move because we're deleting content after the caret.
+    }
+  }
+
+  void _deleteExpandedSelection(CodeSelection currentSelection) {
+    final selectionStart = document.lineColumnToOffset(
+      currentSelection.start.line,
+      currentSelection.start.characterOffset,
+    );
+    final selectionEnd = document.lineColumnToOffset(
+      currentSelection.end.line,
+      currentSelection.end.characterOffset,
+    );
+
+    document.replaceRange(selectionStart, selectionEnd, '');
+
+    selection.value = CodeSelection.collapsed(
+      CodePosition(currentSelection.start.line, currentSelection.start.characterOffset),
+    );
   }
 }
 

@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:inception/src/languages/dart/dart_theme.dart';
 
 final pineappleDartTheme = DartTheme(
-  // Base text: warm, dark brown (excellent contrast on light backgrounds)
   baseTextStyle: const TextStyle(
-    color: Color(0xFF3A2E1F), // deep warm brown
+    color: Color(0xFFECE7D5),
     fontSize: 14,
     height: 1.4,
   ),
@@ -23,7 +22,7 @@ final pineappleDartTheme = DartTheme(
 
   // Identifiers: variables, functions, class names
   identifier: const TextStyle(
-    color: Color(0xFF3A2E1F), // same as base text for calm readability
+    color: Color(0xFFECE7D5),
   ),
 
   // Strings
@@ -49,7 +48,7 @@ final pineappleDartTheme = DartTheme(
 
   // Punctuation: {} () [] , ;
   punctuation: const TextStyle(
-    color: Color(0xFF5C4A32),
+    color: Color(0xFF7CD992),
   ),
 
   // Whitespace (usually invisible, but keep defined)

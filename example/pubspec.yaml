@@ -77,8 +77,13 @@ flutter:
   fonts:
     - family: SourceCodePro
       fonts:
-        - asset: assets/fonts/Source_Code_Pro/SourceCodePro-VariableFont_wght.ttf
-        - asset: assets/fonts/Source_Code_Pro/SourceCodePro-Italic-VariableFont_wght.ttf
+        - asset: assets/fonts/Source_Code_Pro/static/SourceCodePro-Regular.ttf
+        - asset: assets/fonts/Source_Code_Pro/static/SourceCodePro-Italic.ttf
+          style: italic
+        - asset: assets/fonts/Source_Code_Pro/static/SourceCodePro-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Source_Code_Pro/static/SourceCodePro-BoldItalic.ttf
+          weight: 700
           style: italic
   #   - family: Trajan Pro
   #     fonts:

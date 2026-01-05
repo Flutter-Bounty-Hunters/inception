@@ -18,11 +18,12 @@ dependencies:
   flutter_test:
     sdk: flutter
   flutter_test_runners: ^0.0.4
+  flutter_test_robots: ^0.0.24
+  logging: ^1.3.0
 
 dev_dependencies:
   flutter_lints: ^2.0.0
   fake_async: ^1.3.3
   flutter_test_goldens: ^0.0.7
-  flutter_test_robots: ^0.0.24
 
 flutter:

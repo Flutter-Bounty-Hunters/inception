@@ -4,6 +4,11 @@ import 'package:inception/src/document/selection.dart';
 import 'package:inception/src/editor/code_editor.dart';
 
 abstract class CodeEditorInspector {
+  static String findContent([Finder? finder]) {
+    final (codeEditor, _) = _findCodeEditor(finder);
+    return codeEditor.presenter.document.text;
+  }
+
   static CodeSelection? findSelection([Finder? finder]) {
     final (codeEditor, _) = _findCodeEditor(finder);
     return codeEditor.presenter.selection.value;

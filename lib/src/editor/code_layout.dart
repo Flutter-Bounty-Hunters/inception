@@ -158,7 +158,7 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
 
   @override
   CodePosition? findPositionInLineBelow(CodePosition position, {double? preferredXOffset}) {
-    if (position.line >= widget.codeLines.length || position.line < -1) {
+    if (position.line >= widget.codeLines.length - 1 || position.line < -1) {
       return null;
     }
 
@@ -213,7 +213,13 @@ class CodeLinesState extends State<CodeLines> implements CodeLayout {
       return lineLayout.findCodePositionNearestGlobalOffset(globalOffset);
     }
 
-    return (const CodePosition(0, 0), TextAffinity.downstream);
+    // Place caret at the end of the document.
+    // TODO: Create a property on CodeLineLayout for endPosition and query that instead of messing
+    //       with plain text length in styled code lines.
+    return (
+      CodePosition(widget.codeLines.length - 1, widget.codeLines.last.toPlainText().length),
+      TextAffinity.downstream,
+    );
   }
 
   @override

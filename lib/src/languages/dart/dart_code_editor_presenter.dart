@@ -9,16 +9,15 @@ class DartCodeEditorPresenter extends CodeEditorPresenter {
       : _codeLines = ValueNotifier([]),
         super(document) {
     _syntaxHighlighter.attachToDocument(document);
+    _syntaxHighlighter.addListener(_onStyledLinesChanged);
 
-    _codeLines.value = [
-      for (int i = 0; i < _syntaxHighlighter.lineCount; i += 1) //
-        _syntaxHighlighter.getStyledLineAt(i)!,
-    ];
+    _onStyledLinesChanged();
   }
 
   @override
   void dispose() {
     _syntaxHighlighter.detachFromDocument();
+    _syntaxHighlighter.removeListener(_onStyledLinesChanged);
     _codeLines.dispose();
     selection.dispose();
   }
@@ -28,4 +27,11 @@ class DartCodeEditorPresenter extends CodeEditorPresenter {
   final ValueNotifier<List<TextSpan>> _codeLines;
 
   final CodeDocumentSyntaxHighlighter _syntaxHighlighter;
+
+  void _onStyledLinesChanged() {
+    _codeLines.value = [
+      for (int i = 0; i < _syntaxHighlighter.lineCount; i += 1) //
+        _syntaxHighlighter.getStyledLineAt(i)!,
+    ];
+  }
 }
