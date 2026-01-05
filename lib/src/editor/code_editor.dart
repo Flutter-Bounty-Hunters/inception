@@ -3,10 +3,12 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:inception/inception.dart';
+import 'package:inception/src/document/code_document.dart';
+import 'package:inception/src/document/lexing.dart';
 import 'package:inception/src/document/selection.dart';
 import 'package:inception/src/editor/code_layout.dart';
 import 'package:inception/src/editor/theme.dart';
+import 'package:inception/src/infrastructure/text/code_comment_selection_rules.dart';
 import 'package:inception/src/logging.dart';
 import 'package:super_editor/super_editor.dart' show TapSequenceGestureRecognizer, ImeInputOwner;
 
@@ -16,6 +18,7 @@ class CodeEditor extends StatefulWidget {
     this.focusNode,
     required this.presenter,
     required this.style,
+    this.debugOnImeChange,
   });
 
   final FocusNode? focusNode;
@@ -23,6 +26,8 @@ class CodeEditor extends StatefulWidget {
   // TODO: The presenter handles the double click, so it should know the Dart vs Luau comment syntax
   final CodeEditorPresenter presenter;
   final CodeEditorStyle style;
+
+  final void Function(TextEditingValue? newImeValue)? debugOnImeChange;
 
   @override
   State<CodeEditor> createState() => _CodeEditorState();
@@ -99,10 +104,14 @@ class _CodeEditorState extends State<CodeEditor> implements DeltaTextInputClient
         ),
       )..show();
       InceptionLog.input.fine("Is new IME connection attached? ${_imeConnection?.attached}");
+
+      _syncCurrentEditingValueWithCodeDocument();
     } else {
       // Lost focus. Close the IME connection.
       InceptionLog.input.info("Closing IME connection because we lost focus");
       _imeConnection?.close();
+
+      _updateCurrentTextEditingValue(null);
     }
   }
 
@@ -704,6 +713,11 @@ class _CodeEditorState extends State<CodeEditor> implements DeltaTextInputClient
   TextEditingValue? get currentTextEditingValue => _currentTextEditingValue;
   TextEditingValue? _currentTextEditingValue;
 
+  void _updateCurrentTextEditingValue(TextEditingValue? newValue) {
+    _currentTextEditingValue = newValue;
+    widget.debugOnImeChange?.call(newValue);
+  }
+
   @override
   void updateEditingValueWithDeltas(List<TextEditingDelta> textEditingDeltas) {
     InceptionLog.input.fine("Received ${textEditingDeltas.length} delta(s) from IME");
@@ -752,31 +766,36 @@ class _CodeEditorState extends State<CodeEditor> implements DeltaTextInputClient
   void performAction(TextInputAction action) {
     // No-op. These are for mobile keyboards. We receive newlines as "\n" characters in
     // insertion deltas.
-
-    // InceptionLog.input.info("Performing action: '$action'");
-    // switch (action) {
-    //   case TextInputAction.newline:
-    //     widget.presenter.insertNewline();
-    //   default:
-    //   // No-op
-    // }
   }
 
   void _syncCurrentEditingValueWithCodeDocument() {
     final selection = widget.presenter.selection.value;
     if (selection != null) {
       if (selection.isCollapsed) {
-        _currentTextEditingValue = TextEditingValue(
+        _updateCurrentTextEditingValue(TextEditingValue(
           text: widget.presenter.getLine(selection.extent.line),
           selection: TextSelection.collapsed(offset: selection.extent.characterOffset),
-        );
+        ));
+      } else if (selection.base.line == selection.extent.line) {
+        // Expanded selection within a line.
+        _updateCurrentTextEditingValue(TextEditingValue(
+          text: widget.presenter.getLine(selection.extent.line),
+          selection: TextSelection(
+            baseOffset: selection.base.characterOffset,
+            extentOffset: selection.extent.characterOffset,
+          ),
+        ));
       } else {
         // TODO: expanded selection.
-        _currentTextEditingValue = null;
+        _updateCurrentTextEditingValue(null);
       }
     } else {
-      _currentTextEditingValue = null;
+      _updateCurrentTextEditingValue(null);
     }
+
+    _imeConnection?.setEditingState(_currentTextEditingValue ?? const TextEditingValue());
+
+    widget.debugOnImeChange?.call(_currentTextEditingValue);
   }
 
   @override
@@ -1195,18 +1214,8 @@ abstract class CodeEditorPresenter {
 
       document.delete(offset: documentCaretOffset - 1, count: 1);
 
-      if (currentSelection.extent.characterOffset > 0) {
-        selection.value = CodeSelection.collapsed(
-          CodePosition(currentSelection.extent.line, currentSelection.extent.characterOffset - 1),
-        );
-      } else {
-        // We're at the start of a line, so we need to move up a line.
-        final lineAboveIndex = currentSelection.extent.line - 1;
-        final lineAboveLength = document.getLine(lineAboveIndex)!.length;
-        selection.value = CodeSelection.collapsed(
-          CodePosition(lineAboveIndex, lineAboveLength),
-        );
-      }
+      final newExtent = document.offsetToCodePosition(documentCaretOffset - 1);
+      selection.value = CodeSelection.collapsed(newExtent);
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:inception/src/document/code_document.dart';
 import 'package:inception/src/editor/code_editor.dart';
@@ -12,9 +13,12 @@ class DartEditor extends StatefulWidget {
   const DartEditor({
     super.key,
     this.initialCode = "",
+    this.debugOnImeChange,
   });
 
   final String initialCode;
+
+  final void Function(TextEditingValue? newValue)? debugOnImeChange;
 
   @override
   State<DartEditor> createState() => _DartEditorState();
@@ -61,6 +65,7 @@ class _DartEditorState extends State<DartEditor> {
           height: _baseEditorTextStyle.height,
         ),
       ),
+      debugOnImeChange: widget.debugOnImeChange,
     );
   }
 }
