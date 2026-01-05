@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
-import 'package:inception/inception.dart';
 import 'package:inception/src/document/lexing.dart';
 import 'package:inception/src/document/piece_table.dart';
+import 'package:inception/src/document/selection.dart';
 
 class CodeDocument {
   @visibleForTesting
@@ -224,10 +224,15 @@ class CodeDocument {
     if (isMultiLineEdit) {
       // A multi-line change requires full re-tokenizing. We can avoid that
       // by implementing incremental re-mapping, but we haven't done that yet.
+
       _tokens = provider.tokenize(text);
-      _onTokensChanged(0, text.length, _tokens);
+
+      // IMPORTANT: full document invalidation
       _lastEditRange = null;
       _tokenizedDocumentLength = length;
+
+      // Notify AFTER state is fully consistent
+      _onTokensChanged(0, length, _tokens);
 
       return;
     }
@@ -482,7 +487,9 @@ class CodeDocument {
   int lineColumnToOffset(int line, int column) => _lineStarts[line] + column;
 
   int get lineCount => _lineStarts.length;
+
   int getLineStart(int line) => _lineStarts[line];
+
   int getLineEnd(int line) => line < lineCount - 1 //
       ? getLineStart(line + 1) - 1 // -1 to remove the trailing newline at the end of the line.
       : length;
@@ -811,7 +818,9 @@ class _DeleteAction implements _EditAction {
 
   @override
   bool canBatchWith(_EditAction existingBatch) {
-    if (existingBatch is! _DeleteAction) return false;
+    if (existingBatch is! _DeleteAction) {
+      return false;
+    }
 
     // Only batch with deletions that deleted text immediately preceding
     // this existing delete actions deletion. E.g., "abcd", delete "d", can
@@ -847,17 +856,6 @@ abstract class _EditAction {
 
   _EditAction appendAtEnd(_EditAction actionToAppend) => throw UnsupportedError('Cannot merge actions');
 }
-
-// class TextSelection {
-//   TextSelection({required int start, required int end})
-//       : start = start < end ? start : end,
-//         end = start < end ? end : start;
-//
-//   final int start;
-//   final int end;
-//
-//   bool get isCollapsed => start == end;
-// }
 
 abstract class LexerTokenListener {
   /// Called after tokens in the given document range changed.

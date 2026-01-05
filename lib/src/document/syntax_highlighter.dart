@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/painting.dart';
 import 'package:inception/src/document/code_document.dart';
 
@@ -6,7 +7,7 @@ import 'package:inception/src/document/code_document.dart';
 /// To highlight a document, and continue highlighting it when it changes, call [attachToDocument].
 ///
 /// To display the styled lines, get the [lineCount] and then query desired lines with [getStyledLineAt].
-abstract class CodeDocumentSyntaxHighlighter implements LexerTokenListener {
+abstract class CodeDocumentSyntaxHighlighter implements LexerTokenListener, ChangeNotifier {
   /// Sets the base text style, on top of which the [theme] is applied.
   ///
   /// When the base text style is changed, all syntax highlighting is re-run, recreating

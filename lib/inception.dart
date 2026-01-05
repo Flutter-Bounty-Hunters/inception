@@ -14,6 +14,8 @@ export 'src/editor/theme.dart';
 
 export 'src/infrastructure/text/code_comment_selection_rules.dart';
 
+export 'src/logging.dart';
+
 export 'src/lsp/lsp_client.dart';
 export 'src/lsp/messages/initialize.dart';
 export 'src/lsp/messages/code_actions.dart';
