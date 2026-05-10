@@ -90,6 +90,21 @@ class TestCodeEditorPresenter implements CodeEditorPresenter {
   }
 
   @override
+  void toggleSelectionComments() {
+    // TODO:
+  }
+
+  @override
+  void moveSelectedLinesDown() {
+    // TODO: implement moveSelectedLinesDown
+  }
+
+  @override
+  void moveSelectedLinesUp() {
+    // TODO: implement moveSelectedLinesUp
+  }
+
+  @override
   void backspace() {
     // TODO: implement backspace
   }

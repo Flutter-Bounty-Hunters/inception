@@ -65,7 +65,7 @@ class _DartEditorAppState extends State<_DartEditorApp> {
   Widget _buildDebugBar() {
     return DefaultTextStyle(
       style: const TextStyle(
-        fontFamily: "SourceCodePro",
+        fontFamily: _sourceCodePro,
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -95,7 +95,7 @@ class _DartEditorAppState extends State<_DartEditorApp> {
                 richText: TextSpan(
                   text: _codeEditorImeValue?.text ?? "",
                   style: const TextStyle(
-                    fontFamily: "SourceCodePro",
+                    fontFamily: _sourceCodePro,
                     letterSpacing: 1,
                   ),
                 ),
@@ -121,3 +121,5 @@ const _helloWorldApp = '''
 void main() {
   print("Hello, world!");
 }''';
+
+const _sourceCodePro = "SourceCodePro";

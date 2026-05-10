@@ -33,6 +33,10 @@ class CodeSelection {
   /// extent of the selection comes before the base.
   bool get isUpstream => base > extent;
 
+  CodeSelection get oneLineUp => CodeSelection(base: base.oneLineUp, extent: extent.oneLineUp);
+
+  CodeSelection get oneLineDown => CodeSelection(base: base.oneLineDown, extent: extent.oneLineDown);
+
   CodeRange toRange() {
     final affinity = extent.line > base.line || extent.characterOffset >= base.characterOffset
         ? TextAffinity.downstream
@@ -82,6 +86,10 @@ class CodePosition implements Comparable<CodePosition> {
 
   final int line;
   final int characterOffset;
+
+  CodePosition get oneLineUp => CodePosition(line - 1, characterOffset);
+
+  CodePosition get oneLineDown => CodePosition(line + 1, characterOffset);
 
   bool operator <(CodePosition other) {
     return compareTo(other) < 0;

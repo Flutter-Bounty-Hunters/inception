@@ -226,6 +226,13 @@ class _CodeEditorState extends State<CodeEditor> implements DeltaTextInputClient
 
     switch (keyEvent.logicalKey) {
       // TODO: Toggle comments on CMD + "/"
+      case LogicalKeyboardKey.slash:
+        if (HardwareKeyboard.instance.isMetaPressed) {
+          widget.presenter.toggleSelectionComments();
+          return KeyEventResult.handled;
+        }
+
+        return KeyEventResult.ignored;
       case LogicalKeyboardKey.backspace:
         InceptionLog.input.info("Backspace pressed");
         final selection = widget.presenter.selection.value;
@@ -438,6 +445,12 @@ class _CodeEditorState extends State<CodeEditor> implements DeltaTextInputClient
           return KeyEventResult.ignored;
         }
 
+        if (HardwareKeyboard.instance.isShiftPressed && HardwareKeyboard.instance.isAltPressed) {
+          // Shortcut to move selection up a line.
+          widget.presenter.moveSelectedLinesUp();
+          return KeyEventResult.handled;
+        }
+
         if (selection.isCollapsed && !HardwareKeyboard.instance.isShiftPressed) {
           _pushCaretInDirection(_SelectionDirection.up);
         } else if (selection.isExpanded && !HardwareKeyboard.instance.isShiftPressed) {
@@ -458,6 +471,12 @@ class _CodeEditorState extends State<CodeEditor> implements DeltaTextInputClient
         final selection = widget.presenter.selection.value;
         if (selection == null) {
           return KeyEventResult.ignored;
+        }
+
+        if (HardwareKeyboard.instance.isShiftPressed && HardwareKeyboard.instance.isAltPressed) {
+          // Shortcut to move selection down a line.
+          widget.presenter.moveSelectedLinesDown();
+          return KeyEventResult.handled;
         }
 
         if (selection.isCollapsed && !HardwareKeyboard.instance.isShiftPressed) {
@@ -1192,6 +1211,80 @@ abstract class CodeEditorPresenter {
     selection.value = CodeSelection.collapsed(
       CodePosition(currentSelection.extent.line + 1, 0),
     );
+  }
+
+  void toggleSelectionComments();
+
+  void moveSelectedLinesUp() {
+    final currentSelection = selection.value;
+    if (currentSelection == null) {
+      return;
+    }
+    if (currentSelection.start.line == 0) {
+      // There are no lines above the selection. Fizzle.
+      return;
+    }
+
+    final lineToMove = document.getLine(currentSelection.start.line - 1);
+
+    // Insert a newline after the selection, and insert the line we want to move.
+    late final int insertionIndex;
+    if (currentSelection.end.line >= document.lineCount - 1) {
+      // No existing line after us.
+      insertionIndex = document.length;
+    } else {
+      // There's a line after us, so we can get its starting index.
+      final startOfLineAfter = document.lineColumnToOffset(currentSelection.end.line + 1, 0);
+      final endOfLastLine = startOfLineAfter - 1;
+      insertionIndex = endOfLastLine;
+    }
+    print("Inserting copy of line at $insertionIndex");
+    document.insert(insertionIndex, "\n$lineToMove");
+
+    // Remove the original line.
+    final removalStart = document.lineColumnToOffset(currentSelection.start.line - 1, 0);
+    final removalEnd = document.lineColumnToOffset(currentSelection.start.line, 0);
+    print("Removing line from $removalStart to $removalEnd");
+    document.replaceRange(removalStart, removalEnd, "");
+
+    selection.value = currentSelection.oneLineUp;
+  }
+
+  void moveSelectedLinesDown() {
+    final currentSelection = selection.value;
+    if (currentSelection == null) {
+      return;
+    }
+    if (currentSelection.end.line >= document.lineCount - 1) {
+      // There are no lines below the selection. Fizzle.
+      return;
+    }
+
+    final lineToMoveIndex = currentSelection.end.line + 1;
+    final lineToMove = document.getLine(lineToMoveIndex);
+    print("Moving line down: '$lineToMove'");
+
+    // Remove the line after the selection.
+    var removalStart = document.getLineStart(lineToMoveIndex);
+    var removalEnd = document.getLineEnd(lineToMoveIndex);
+    if (removalEnd < document.length) {
+      removalEnd += 1; // Capture the newline at the end of line.
+    } else {
+      // We're moving the last line. Delete the leading newline instead of trailing.
+      removalStart -= 1;
+    }
+    print("Removing line from $removalStart to $removalEnd");
+    print("Document length: ${document.length}");
+    print("Removing: '${document.text.substring(removalStart, removalEnd)}'");
+    document.replaceRange(removalStart, removalEnd, "");
+
+    // Insert the removed line before the selection, along with a newline to push
+    // the selection down a line, beyond the inserted text.
+    final insertionIndex = document.lineColumnToOffset(currentSelection.start.line, 0);
+    print("Inserting copy of line at $insertionIndex");
+    document.insert(insertionIndex, "$lineToMove\n");
+
+    selection.value = currentSelection.oneLineDown;
   }
 
   void backspace() {

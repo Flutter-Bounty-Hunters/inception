@@ -7,11 +7,15 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  analyzer: ^6.4.1
+  analyzer: any
   flutter:
     sdk: flutter
   path: ^1.9.0
-  super_editor: ^0.3.0-dev.43
+  super_editor:
+    git:
+      url: https://github.com/flutter-bounty-hunters/super_editor
+      path: super_editor
+      ref: stable
   super_text_layout: ^0.1.19
 
   # For exporting test tools:
